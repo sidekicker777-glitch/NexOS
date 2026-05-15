@@ -47,7 +47,15 @@ for pkg in plymouth plymouth-themes lsb-release neofetch fastfetch mesa-utils fi
   install_if_available "$pkg"
 done
 
-mkdir -p /usr/local/bin /usr/share/applications /usr/share/nexos /usr/share/plymouth/themes/nexos "$home_dir/Desktop" "$home_dir/.config/autostart"
+mkdir -p \
+  /usr/local/bin \
+  /usr/share/applications \
+  /usr/share/nexos \
+  /usr/share/plymouth/themes/nexos \
+  /etc/default/grub.d \
+  /etc/lightdm/lightdm-gtk-greeter.conf.d \
+  "$home_dir/Desktop" \
+  "$home_dir/.config/autostart"
 
 cat > /etc/hostname <<'EOF'
 nexos-live
@@ -138,14 +146,11 @@ if command -v plymouth-set-default-theme >/dev/null 2>&1; then
   update-initramfs -u || true
 fi
 
-# GRUB branding inside installed/live system where applicable.
 cat > /etc/default/grub.d/99-nexos-branding.cfg <<'EOF'
 GRUB_DISTRIBUTOR="NexOS"
 GRUB_CMDLINE_LINUX_DEFAULT="quiet splash vt.global_cursor_default=0"
 EOF
 
-# LightDM greeter branding if autologin is disabled later.
-mkdir -p /etc/lightdm/lightdm-gtk-greeter.conf.d
 cat > /etc/lightdm/lightdm-gtk-greeter.conf.d/50-nexos-greeter.conf <<EOF
 [greeter]
 background=/usr/share/backgrounds/nexos/nexos-default.png
@@ -263,9 +268,9 @@ Terminal=false
 Categories=$cats
 DESKTOP
 }
-make_desktop /usr/share/applications/nexos-startup-center.desktop "NexOS Startup Center" "Open the NexOS welcome/startup screen" "nexos-startup-center" "help-browser" "System;"
-make_desktop /usr/share/applications/nexos-gpu-info.desktop "NexOS GPU Info" "Show GPU and display information" "nexos-gpu-info" "video-display" "System;"
-make_desktop /usr/share/applications/nexos-vm-display-help.desktop "NexOS VM Display Help" "VirtualBox display and GPU help" "nexos-vm-display-help" "video-display" "System;"
+make_desktop /usr/share/applications/nexos-startup-center.desktop "NexOS Startup Center" "Open the NexOS welcome/startup screen" "nexos-startup-center" "nexos-startup" "System;"
+make_desktop /usr/share/applications/nexos-gpu-info.desktop "NexOS GPU Info" "Show GPU and display information" "nexos-gpu-info" "nexos-gpu" "System;"
+make_desktop /usr/share/applications/nexos-vm-display-help.desktop "NexOS VM Display Help" "VirtualBox display and GPU help" "nexos-vm-display-help" "nexos-gpu" "System;"
 
 cp -f /usr/share/applications/nexos-startup-center.desktop "$home_dir/Desktop/NexOS Startup Center.desktop" || true
 cp -f /usr/share/applications/nexos-vm-display-help.desktop "$home_dir/Desktop/NexOS VM Display Help.desktop" || true
@@ -293,12 +298,10 @@ sed -i \
   "$LB_CONFIG_DIR/hooks/normal/100-nexos-branding-boot.hook.chroot"
 chmod 0755 "$LB_CONFIG_DIR/hooks/normal/100-nexos-branding-boot.hook.chroot"
 
-# Binary hook runs after the bootloader files are generated. It replaces visible Debian text.
 cat > "$LB_CONFIG_DIR/hooks/normal/900-nexos-bootloader-branding.hook.binary" <<'BINARYHOOK'
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Replace visible Debian labels in generated boot menus where live-build puts them.
 find . -type f \( -name '*.cfg' -o -name '*.txt' -o -name '*.conf' \) 2>/dev/null | while read -r file; do
   sed -i \
     -e 's/Debian GNU\/Linux 13 (trixie)/NexOS Origin/g' \
