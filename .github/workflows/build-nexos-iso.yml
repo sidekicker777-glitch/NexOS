@@ -44,16 +44,20 @@ jobs:
             debian:trixie \
             bash -lc '
               set -Eeuo pipefail
+
               apt-get update
+
               apt-get install -y --no-install-recommends \
                 bash ca-certificates coreutils curl file findutils git grep gzip \
                 live-build debootstrap squashfs-tools xorriso isolinux \
                 syslinux-common syslinux-utils dosfstools mtools parted rsync \
                 make sed tar util-linux
+
               make init
               make part3-verify
               make iso
               make validate-iso
+
               ls -lh iso
             '
 
