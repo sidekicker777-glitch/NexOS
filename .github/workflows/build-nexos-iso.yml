@@ -2,6 +2,16 @@ name: Build NexOS ISO
 
 on:
   workflow_dispatch:
+    inputs:
+      edition:
+        description: 'Which NexOS ISO edition to build'
+        required: true
+        default: 'main'
+        type: choice
+        options:
+          - main
+          - security
+          - both
   push:
     branches:
       - main
@@ -21,6 +31,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-iso:
     name: Build bootable live ISO
@@ -39,11 +52,13 @@ jobs:
       - name: Build ISO inside Debian Trixie container
         run: |
           mkdir -p build/logs iso
+          EDITION="${{ github.event.inputs.edition || 'main' }}"
 
           docker run --privileged --rm \
             -v "$PWD:/work" \
             -w /work \
             -e DEBIAN_FRONTEND=noninteractive \
+            -e NEXOS_EDITION="$EDITION" \
             debian:trixie \
             bash -lc '
               set -Eeuxo pipefail
@@ -61,10 +76,19 @@ jobs:
               # GitHub web uploads can remove Linux executable permissions.
               find scripts testing -type f -name "*.sh" -exec chmod +x {} +
 
-              # Build the ISO directly. The ISO script regenerates live-build config itself,
-              # so we do not run unrelated VirtualBox verification in this cloud build.
-              make iso 2>&1 | tee build/logs/github-actions-make-iso.log
-              make validate-iso 2>&1 | tee build/logs/github-actions-validate-iso.log
+              if [[ "$NEXOS_EDITION" == "both" ]]; then
+                make iso-main 2>&1 | tee build/logs/github-actions-main-iso.log
+                make validate-iso-main 2>&1 | tee build/logs/github-actions-main-validate.log
+                make clean 2>&1 | tee build/logs/github-actions-clean-between-editions.log || true
+                make iso-security 2>&1 | tee build/logs/github-actions-security-iso.log
+                make validate-iso-security 2>&1 | tee build/logs/github-actions-security-validate.log
+              elif [[ "$NEXOS_EDITION" == "security" ]]; then
+                make iso-security 2>&1 | tee build/logs/github-actions-security-iso.log
+                make validate-iso-security 2>&1 | tee build/logs/github-actions-security-validate.log
+              else
+                make iso-main 2>&1 | tee build/logs/github-actions-main-iso.log
+                make validate-iso-main 2>&1 | tee build/logs/github-actions-main-validate.log
+              fi
 
               ls -lh iso
             '
