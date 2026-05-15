@@ -11,6 +11,7 @@ on:
       - 'build-config/**'
       - 'live-build/**'
       - 'scripts/**'
+      - 'testing/**'
       - '.github/workflows/build-nexos-iso.yml'
 
 permissions:
@@ -52,6 +53,9 @@ jobs:
                 live-build debootstrap squashfs-tools xorriso isolinux \
                 syslinux-common syslinux-utils dosfstools mtools parted rsync \
                 make sed tar util-linux
+
+              # GitHub web uploads can remove Linux executable permissions.
+              find scripts testing -type f -name "*.sh" -exec chmod +x {} +
 
               make init
               make part3-verify
