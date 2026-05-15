@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Injects NexOS visual polish and VM display fixes.
 # Goal: stop the ISO from looking tiny/cluttered in VirtualBox and make the desktop cleaner.
+# This script also chains the boot-branding and icon-fix injectors so the main ISO builder stays focused.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -45,7 +46,6 @@ done
 
 mkdir -p /usr/local/bin /usr/share/applications /usr/share/backgrounds/nexos "$home_dir/Desktop" "$home_dir/.config/autostart" "$home_dir/.config/xfce4/xfconf/xfce-perchannel-xml"
 
-# Create an original NexOS wallpaper with installed open-source ImageMagick when available.
 if command -v convert >/dev/null 2>&1; then
   convert -size 1920x1080 gradient:'#07111f-#101827' \
     -fill '#0fd3ff' -draw 'rectangle 0,0 1920,5' \
@@ -59,14 +59,9 @@ fi
 cat > /usr/local/bin/nexos-display-fix <<'DISPLAYFIX'
 #!/usr/bin/env bash
 set -euo pipefail
-
-# Makes VirtualBox/QEMU live sessions use a more readable resolution when possible.
-# Safe to run multiple times.
 if ! command -v xrandr >/dev/null 2>&1; then exit 0; fi
-
 connected_outputs="$(xrandr --query | awk '/ connected/{print $1}')"
 [[ -n "$connected_outputs" ]] || exit 0
-
 for out in $connected_outputs; do
   modes="$(xrandr --query | awk -v o="$out" '$1==o{show=1; next} /^[A-Za-z0-9-]+ connected/{show=0} show && $1 ~ /^[0-9]+x[0-9]+/{print $1}')"
   preferred=""
@@ -77,8 +72,6 @@ for out in $connected_outputs; do
     xrandr --output "$out" --mode "$preferred" >/dev/null 2>&1 || true
   fi
 done
-
-# Larger desktop icons and readable font scaling.
 xfconf-query -c xsettings -p /Gtk/FontName -s 'Noto Sans 11' 2>/dev/null || true
 xfconf-query -c xsettings -p /Gtk/MonospaceFontName -s 'DejaVu Sans Mono 11' 2>/dev/null || true
 xfconf-query -c xfce4-desktop -p /desktop-icons/icon-size -s 56 2>/dev/null || true
@@ -88,15 +81,12 @@ chmod 0755 /usr/local/bin/nexos-display-fix
 cat > /usr/local/bin/nexos-clean-desktop <<'CLEAN'
 #!/usr/bin/env bash
 set -euo pipefail
-
 desktop="$HOME/Desktop"
-mkdir -p "$desktop"
-# Hide clutter: keep only the main NexOS launchers on the desktop.
-mkdir -p "$HOME/.local/share/nexos-hidden-desktop-launchers"
+mkdir -p "$desktop" "$HOME/.local/share/nexos-hidden-desktop-launchers"
 find "$desktop" -maxdepth 1 -type f -name '*.desktop' | while read -r file; do
   base="$(basename "$file")"
   case "$base" in
-    "NexOS Control Center.desktop"|"NexOS Install Center.desktop"|"NexOS Dev Center.desktop"|"NexOS Help.desktop"|"NexOS Power.desktop") ;;
+    "NexOS Control Center.desktop"|"NexOS Install Center.desktop"|"NexOS Dev Center.desktop"|"NexOS Help.desktop"|"NexOS Power.desktop"|"NexOS Startup Center.desktop"|"NexOS VM Display Help.desktop") ;;
     *) mv -f "$file" "$HOME/.local/share/nexos-hidden-desktop-launchers/$base" 2>/dev/null || rm -f "$file" ;;
   esac
 done
@@ -109,15 +99,14 @@ set -euo pipefail
 nexos-display-fix || true
 nexos-clean-desktop || true
 if [[ -f /usr/share/backgrounds/nexos/nexos-default.png ]]; then
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual-1/workspace0/last-image -n -t string -s /usr/share/backgrounds/nexos/nexos-default.png 2>/dev/null || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitorVirtual1/workspace0/last-image -n -t string -s /usr/share/backgrounds/nexos/nexos-default.png 2>/dev/null || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -n -t string -s /usr/share/backgrounds/nexos/nexos-default.png 2>/dev/null || true
-  xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-style -n -t int -s 5 2>/dev/null || true
+  for monitor in monitorVirtual-1 monitorVirtual1 monitor0 monitorVGA-1; do
+    xfconf-query -c xfce4-desktop -p /backdrop/screen0/$monitor/workspace0/last-image -n -t string -s /usr/share/backgrounds/nexos/nexos-default.png 2>/dev/null || true
+    xfconf-query -c xfce4-desktop -p /backdrop/screen0/$monitor/workspace0/image-style -n -t int -s 5 2>/dev/null || true
+  done
 fi
 VISUAL
 chmod 0755 /usr/local/bin/nexos-visual-setup
 
-# XFCE desktop preferences: larger icons, clean wallpaper, less ugly default feel.
 cat > "$home_dir/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" <<XML
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-desktop" version="1.0">
@@ -139,14 +128,13 @@ cat > "$home_dir/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" <<X
 </channel>
 XML
 
-# Better panel than the tiny default: taller bottom panel with main launchers.
 mkdir -p "$home_dir/.config/xfce4/panel/launcher-20" "$home_dir/.config/xfce4/panel/launcher-21" "$home_dir/.config/xfce4/panel/launcher-22"
 cat > "$home_dir/.config/xfce4/panel/launcher-20/nexos-control-center.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
 Name=Control Center
 Exec=nexos-control-center
-Icon=preferences-system
+Icon=nexos-control-center
 Terminal=false
 DESKTOP
 cat > "$home_dir/.config/xfce4/panel/launcher-21/nexos-dev-center.desktop" <<'DESKTOP'
@@ -154,7 +142,7 @@ cat > "$home_dir/.config/xfce4/panel/launcher-21/nexos-dev-center.desktop" <<'DE
 Type=Application
 Name=Dev Center
 Exec=nexos-dev-center
-Icon=applications-development
+Icon=nexos-dev-center
 Terminal=false
 DESKTOP
 cat > "$home_dir/.config/xfce4/panel/launcher-22/nexos-install-center.desktop" <<'DESKTOP'
@@ -162,7 +150,7 @@ cat > "$home_dir/.config/xfce4/panel/launcher-22/nexos-install-center.desktop" <
 Type=Application
 Name=Install Center
 Exec=nexos-install-center
-Icon=system-software-install
+Icon=nexos-install-center
 Terminal=false
 DESKTOP
 
@@ -178,28 +166,15 @@ cat > "$home_dir/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" <<'XM
       <property name="position-locked" type="bool" value="true"/>
       <property name="size" type="uint" value="50"/>
       <property name="plugin-ids" type="array">
-        <value type="int" value="1"/>
-        <value type="int" value="20"/>
-        <value type="int" value="21"/>
-        <value type="int" value="22"/>
-        <value type="int" value="4"/>
-        <value type="int" value="5"/>
-        <value type="int" value="6"/>
-        <value type="int" value="7"/>
+        <value type="int" value="1"/><value type="int" value="20"/><value type="int" value="21"/><value type="int" value="22"/><value type="int" value="4"/><value type="int" value="5"/><value type="int" value="6"/><value type="int" value="7"/>
       </property>
     </property>
   </property>
   <property name="plugins" type="empty">
     <property name="plugin-1" type="string" value="whiskermenu"/>
-    <property name="plugin-20" type="string" value="launcher">
-      <property name="items" type="array"><value type="string" value="nexos-control-center.desktop"/></property>
-    </property>
-    <property name="plugin-21" type="string" value="launcher">
-      <property name="items" type="array"><value type="string" value="nexos-dev-center.desktop"/></property>
-    </property>
-    <property name="plugin-22" type="string" value="launcher">
-      <property name="items" type="array"><value type="string" value="nexos-install-center.desktop"/></property>
-    </property>
+    <property name="plugin-20" type="string" value="launcher"><property name="items" type="array"><value type="string" value="nexos-control-center.desktop"/></property></property>
+    <property name="plugin-21" type="string" value="launcher"><property name="items" type="array"><value type="string" value="nexos-dev-center.desktop"/></property></property>
+    <property name="plugin-22" type="string" value="launcher"><property name="items" type="array"><value type="string" value="nexos-install-center.desktop"/></property></property>
     <property name="plugin-4" type="string" value="tasklist"/>
     <property name="plugin-5" type="string" value="separator"><property name="expand" type="bool" value="true"/><property name="style" type="uint" value="0"/></property>
     <property name="plugin-6" type="string" value="systray"/>
@@ -217,7 +192,6 @@ Terminal=false
 X-GNOME-Autostart-enabled=true
 DESKTOP
 
-# Clean the desktop at build time too.
 HOME="$home_dir" /usr/local/bin/nexos-clean-desktop || true
 
 cat >> /usr/share/nexos/app-map.txt <<'APPMAP_APPEND'
@@ -240,4 +214,8 @@ sed -i \
   "$LB_CONFIG_DIR/hooks/normal/090-nexos-visual-polish.hook.chroot"
 chmod 0755 "$LB_CONFIG_DIR/hooks/normal/090-nexos-visual-polish.hook.chroot"
 
-success "Injected NexOS visual polish for $NEXOS_EDITION."
+# Chain late-stage polish injectors.
+bash "$SCRIPT_DIR/16-inject-nexos-branding-boot.sh"
+bash "$SCRIPT_DIR/17-inject-nexos-icons-fix.sh"
+
+success "Injected NexOS visual polish, branding, and icon fixes for $NEXOS_EDITION."
