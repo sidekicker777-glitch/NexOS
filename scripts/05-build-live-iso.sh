@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds a bootable NexOS live ISO using Debian live-build.
 # Editions:
-#   main     = normal NexOS desktop
-#   creator  = NexOS desktop plus open-source creative tools such as Blender
+#   main     = clean NexOS desktop
+#   tools    = NexOS desktop plus broad open-source tool packs
+#   creator  = alias-style creator build kept for older workflow targets
 #   security = NexOS desktop plus optional security-center tools
 
 set -Eeuo pipefail
@@ -18,8 +19,8 @@ require_cmd sed
 
 NEXOS_EDITION="${NEXOS_EDITION:-main}"
 case "$NEXOS_EDITION" in
-  main|creator|security) ;;
-  *) fail "Invalid NEXOS_EDITION='$NEXOS_EDITION'. Use: main, creator, or security" ;;
+  main|tools|creator|security) ;;
+  *) fail "Invalid NEXOS_EDITION='$NEXOS_EDITION'. Use: main, tools, creator, or security" ;;
 esac
 
 BASE_ISO_NAME="${ISO_IMAGE_NAME%.iso}"
@@ -27,6 +28,10 @@ case "$NEXOS_EDITION" in
   main)
     OUTPUT_ISO="$ARTIFACT_ISO"
     EDITION_LABEL="NexOS Main"
+    ;;
+  tools)
+    OUTPUT_ISO="$ISO_DIR/${BASE_ISO_NAME}-tools.iso"
+    EDITION_LABEL="NexOS Tools"
     ;;
   creator)
     OUTPUT_ISO="$ISO_DIR/${BASE_ISO_NAME}-creator.iso"
@@ -48,7 +53,7 @@ if [[ -d "$LIVE_BUILD_DIR/config" ]]; then
 fi
 bash "$BUILD_SCRIPT_DIR/02-init-live-build.sh"
 
-log "Injecting $EDITION_LABEL packages and NexOS integration."
+log "Injecting $EDITION_LABEL packages and NexOS app integration."
 
 cat > "$LB_CONFIG_DIR/package-lists/40-nexos-common-tools.list.chroot" <<'PKGS'
 # NexOS common open-source desktop tools.
@@ -67,23 +72,6 @@ fonts-noto-color-emoji
 papirus-icon-theme
 arc-theme
 PKGS
-
-if [[ "$NEXOS_EDITION" == "creator" ]]; then
-  cat > "$LB_CONFIG_DIR/package-lists/50-nexos-creator-tools.list.chroot" <<'PKGS'
-# NexOS Creator edition open-source tools.
-blender
-gimp
-inkscape
-krita
-audacity
-kdenlive
-obs-studio
-ffmpeg
-lmms
-ardour
-handbrake
-PKGS
-fi
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
   cat > "$LB_CONFIG_DIR/package-lists/50-nexos-security-tools.list.chroot" <<'PKGS'
@@ -121,12 +109,23 @@ install_if_available() {
 }
 
 apt-get update || true
+
+# Always try to improve the base desktop, but never let optional packages break the ISO.
 for pkg in xfce4-whiskermenu-plugin xfce4-power-manager xfce4-goodies rofi baobab fastfetch neofetch pciutils usbutils lshw inxi geany-plugins gparted simple-scan; do
   install_if_available "$pkg"
 done
 
-if [[ "$NEXOS_EDITION" == "creator" ]]; then
-  for pkg in blender gimp inkscape krita audacity kdenlive obs-studio ffmpeg lmms ardour handbrake; do
+# Broad NexOS open-source tool pack. This is not just creator apps: it covers creative,
+# development, system, productivity, network, education, and utility categories.
+if [[ "$NEXOS_EDITION" == "tools" || "$NEXOS_EDITION" == "creator" ]]; then
+  for pkg in \
+    blender gimp inkscape krita audacity kdenlive obs-studio ffmpeg lmms ardour handbrake \
+    freecad openscad sweethome3d darktable rawtherapee scribus fontforge \
+    kate codeblocks qtcreator python3-pip python3-tk nodejs npm rustc cargo openjdk-21-jdk \
+    gitg sqlitebrowser dbeaver dbeaver-ce \
+    gnome-disk-utility filezilla remmina thunderbird keepassxc flameshot \
+    virtualbox-guest-x11 qemu-guest-agent spice-vdagent \
+    godot3 love stellarium octave maxima gnuplot qalculate-gtk; do
     install_if_available "$pkg"
   done
 fi
@@ -175,32 +174,53 @@ set -euo pipefail
 REPORT
 chmod 0755 /usr/local/bin/nexos-system-report
 
-cat > /usr/local/bin/nexos-studio <<'STUDIO'
+cat > /usr/local/bin/nexos-toolbox <<'TOOLBOX'
 #!/usr/bin/env bash
 set -euo pipefail
 apps=(
-  "Blender|blender|3D modeling, animation, rendering"
-  "GIMP|gimp|Image editing"
-  "Inkscape|inkscape|Vector graphics"
-  "Krita|krita|Digital painting"
-  "Audacity|audacity|Audio editing"
-  "Kdenlive|kdenlive|Video editing"
-  "OBS Studio|obs|Recording and streaming"
-  "VLC|vlc|Media playback"
+  "3D / Blender|Blender|blender|3D modeling, animation, rendering"
+  "3D / CAD|FreeCAD|freecad|CAD modeling"
+  "3D / CAD|OpenSCAD|openscad|Script-based CAD modeling"
+  "Graphics|GIMP|gimp|Image editing"
+  "Graphics|Inkscape|inkscape|Vector graphics"
+  "Graphics|Krita|krita|Digital painting"
+  "Media|Audacity|audacity|Audio editing"
+  "Media|Kdenlive|kdenlive|Video editing"
+  "Media|OBS Studio|obs|Recording and streaming"
+  "Media|VLC|vlc|Media playback"
+  "Development|Geany|geany|Lightweight code editor"
+  "Development|Kate|kate|Advanced text editor"
+  "Development|Code::Blocks|codeblocks|C/C++ IDE"
+  "Development|Qt Creator|qtcreator|Qt/C++ IDE"
+  "Development|SQLite Browser|sqlitebrowser|SQLite database editor"
+  "Files / Network|FileZilla|filezilla|FTP/SFTP file transfer"
+  "Files / Network|Remmina|remmina|Remote desktop client"
+  "Productivity|LibreOffice Writer|libreoffice|Documents"
+  "Productivity|Thunderbird|thunderbird|Email client"
+  "Security / Passwords|KeePassXC|keepassxc|Password manager"
+  "System|GParted|gparted|Disk partition editor"
+  "System|Disk Utility|gnome-disks|Disk utility"
+  "Education|Stellarium|stellarium|Planetarium"
+  "Education|Octave|octave|Math/science computing"
 )
 menu_items=()
 for row in "${apps[@]}"; do
-  IFS='|' read -r name cmd desc <<< "$row"
-  command -v "$cmd" >/dev/null 2>&1 && menu_items+=("$name" "$desc")
+  IFS='|' read -r category name cmd desc <<< "$row"
+  command -v "$cmd" >/dev/null 2>&1 && menu_items+=("$category" "$name" "$desc")
 done
 if (( ${#menu_items[@]} == 0 )); then
-  zenity --info --title="NexOS Studio" --text="No studio apps are installed in this edition yet." || true
+  zenity --info --title="NexOS Toolbox" --text="No optional toolbox apps are installed in this edition yet." || true
   exit 0
 fi
-choice="$(zenity --list --title="NexOS Studio" --width=650 --height=420 --column="App" --column="Purpose" "${menu_items[@]}" || true)"
+choice="$(zenity --list --title="NexOS Toolbox" --width=780 --height=520 --column="Category" --column="App" --column="Purpose" "${menu_items[@]}" || true)"
 [[ -n "$choice" ]] || exit 0
-case "$choice" in
+# zenity returns first column by default, so use a launcher selection helper if duplicate category is chosen.
+app="$(zenity --entry --title="Open Tool" --text="Type the app name exactly as shown, or cancel.\nSelected category: $choice" || true)"
+[[ -n "$app" ]] || exit 0
+case "$app" in
   Blender) blender >/dev/null 2>&1 & ;;
+  FreeCAD) freecad >/dev/null 2>&1 & ;;
+  OpenSCAD) openscad >/dev/null 2>&1 & ;;
   GIMP) gimp >/dev/null 2>&1 & ;;
   Inkscape) inkscape >/dev/null 2>&1 & ;;
   Krita) krita >/dev/null 2>&1 & ;;
@@ -208,9 +228,26 @@ case "$choice" in
   Kdenlive) kdenlive >/dev/null 2>&1 & ;;
   "OBS Studio") obs >/dev/null 2>&1 & ;;
   VLC) vlc >/dev/null 2>&1 & ;;
+  Geany) geany >/dev/null 2>&1 & ;;
+  Kate) kate >/dev/null 2>&1 & ;;
+  "Code::Blocks") codeblocks >/dev/null 2>&1 & ;;
+  "Qt Creator") qtcreator >/dev/null 2>&1 & ;;
+  "SQLite Browser") sqlitebrowser >/dev/null 2>&1 & ;;
+  FileZilla) filezilla >/dev/null 2>&1 & ;;
+  Remmina) remmina >/dev/null 2>&1 & ;;
+  "LibreOffice Writer") libreoffice --writer >/dev/null 2>&1 & ;;
+  Thunderbird) thunderbird >/dev/null 2>&1 & ;;
+  KeePassXC) keepassxc >/dev/null 2>&1 & ;;
+  GParted) gparted >/dev/null 2>&1 & ;;
+  "Disk Utility") gnome-disks >/dev/null 2>&1 & ;;
+  Stellarium) stellarium >/dev/null 2>&1 & ;;
+  Octave) octave --gui >/dev/null 2>&1 & ;;
+  *) zenity --warning --title="NexOS Toolbox" --text="Unknown or unavailable app: $app" || true ;;
 esac
-STUDIO
-chmod 0755 /usr/local/bin/nexos-studio
+TOOLBOX
+chmod 0755 /usr/local/bin/nexos-toolbox
+# Backward-compatible alias from earlier creator build.
+ln -sf /usr/local/bin/nexos-toolbox /usr/local/bin/nexos-studio
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
   echo Basic > /etc/nexos-security-profile
@@ -230,11 +267,12 @@ cat > /usr/local/bin/nexos-welcome <<'WELCOME'
 set -euo pipefail
 EDITION="__EDITION_LABEL__"
 case "__NEXOS_EDITION__" in
-  creator) EXTRA="Creator edition integrates open-source creative apps for NexOS. Try: nexos-studio" ;;
+  tools) EXTRA="Tools edition integrates many open-source apps into NexOS Toolbox. Try: nexos-toolbox" ;;
+  creator) EXTRA="Creator build is available, but the broader direction is NexOS Tools. Try: nexos-toolbox" ;;
   security) EXTRA="Security edition tools are included. Try: nexos-security-center" ;;
-  *) EXTRA="This is the clean main NexOS edition. Creator and security stacks are separate builds." ;;
+  *) EXTRA="This is the clean main NexOS edition. Extra tool packs are separate builds." ;;
 esac
-zenity --info --title="Welcome to NexOS" --width=650 --height=390 --text="<b>Welcome to $EDITION</b>\n\nThis is your own NexOS operating system. Open-source apps are integrated as NexOS tools and launchers.\n\nLogin: nexos / nexos\n\n$EXTRA\n\nTry:\n  nexos-info\n  nexos-system-report\n  nexos-studio" || true
+zenity --info --title="Welcome to NexOS" --width=680 --height=410 --text="<b>Welcome to $EDITION</b>\n\nThis is your own NexOS operating system. Open-source apps are configured, launched, and organized as NexOS tools.\n\nLogin: nexos / nexos\n\n$EXTRA\n\nTry:\n  nexos-info\n  nexos-system-report\n  nexos-toolbox" || true
 WELCOME
 chmod 0755 /usr/local/bin/nexos-welcome
 
@@ -266,16 +304,16 @@ Categories=System;
 DESKTOP
 chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Welcome.desktop"
 
-cat > "/home/$LIVE_USERNAME/Desktop/NexOS Studio.desktop" <<'DESKTOP'
+cat > "/home/$LIVE_USERNAME/Desktop/NexOS Toolbox.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=NexOS Studio
-Exec=nexos-studio
-Icon=applications-graphics
+Name=NexOS Toolbox
+Exec=nexos-toolbox
+Icon=applications-accessories
 Terminal=false
-Categories=Graphics;AudioVideo;
+Categories=Utility;
 DESKTOP
-chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Studio.desktop"
+chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Toolbox.desktop"
 
 cat > "/home/$LIVE_USERNAME/Desktop/File Manager.desktop" <<'DESKTOP'
 [Desktop Entry]
@@ -299,14 +337,14 @@ Categories=Development;
 DESKTOP
 chmod 0755 "/home/$LIVE_USERNAME/Desktop/Code Editor.desktop"
 
-cat > /usr/share/applications/nexos-studio.desktop <<'DESKTOP'
+cat > /usr/share/applications/nexos-toolbox.desktop <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=NexOS Studio
-Exec=nexos-studio
-Icon=applications-graphics
+Name=NexOS Toolbox
+Exec=nexos-toolbox
+Icon=applications-accessories
 Terminal=false
-Categories=Graphics;AudioVideo;
+Categories=Utility;
 DESKTOP
 
 cat > /usr/share/applications/nexos-system-report.desktop <<'DESKTOP'
