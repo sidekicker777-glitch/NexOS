@@ -3,6 +3,10 @@
 SHELL := /usr/bin/env bash
 .DEFAULT_GOAL := help
 
+# Run scripts through bash so GitHub web uploads and Windows ZIP extraction
+# cannot break the build by removing Linux executable bits.
+RUN := bash
+
 .PHONY: help check deps init iso validate-iso qemu-test part1-verify part2-verify part3-verify part3-cloud-verify vbox-create vbox-start vbox-stop vbox-reset vbox-status vbox-attach-iso vbox-screenshot vbox-logs vbox-clean vbox-test clean clean-full show-config
 
 help:
@@ -39,70 +43,70 @@ help:
 	@echo "  make show-config    Print current NexOS build config"
 
 check:
-	@./scripts/00-host-check.sh
+	@$(RUN) scripts/00-host-check.sh
 
 deps:
-	@./scripts/01-install-host-deps.sh
+	@$(RUN) scripts/01-install-host-deps.sh
 
 init:
-	@./scripts/02-init-live-build.sh
+	@$(RUN) scripts/02-init-live-build.sh
 
 iso:
-	@./scripts/05-build-live-iso.sh
+	@$(RUN) scripts/05-build-live-iso.sh
 
 validate-iso:
-	@./scripts/06-validate-iso.sh
+	@$(RUN) scripts/06-validate-iso.sh
 
 qemu-test:
-	@./testing/qemu-live-smoke-test.sh
+	@$(RUN) testing/qemu-live-smoke-test.sh
 
 part1-verify:
-	@./scripts/04-part1-verify.sh
+	@$(RUN) scripts/04-part1-verify.sh
 
 part2-verify:
-	@./scripts/07-part2-verify.sh
+	@$(RUN) scripts/07-part2-verify.sh
 
 part3-verify:
-	@./scripts/08-part3-verify.sh
+	@$(RUN) scripts/08-part3-verify.sh
 
 part3-cloud-verify:
-	@./scripts/09-part3-windows-cloud-verify.sh
+	@$(RUN) scripts/09-part3-windows-cloud-verify.sh
 
 vbox-create:
-	@./testing/vbox-create.sh
+	@$(RUN) testing/vbox-create.sh
 
 vbox-start:
-	@./testing/vbox-start.sh
+	@$(RUN) testing/vbox-start.sh
 
 vbox-stop:
-	@./testing/vbox-stop.sh
+	@$(RUN) testing/vbox-stop.sh
 
 vbox-reset:
-	@./testing/vbox-reset.sh
+	@$(RUN) testing/vbox-reset.sh
 
 vbox-status:
-	@./testing/vbox-status.sh
+	@$(RUN) testing/vbox-status.sh
 
 vbox-attach-iso:
-	@./testing/vbox-attach-iso.sh
+	@$(RUN) testing/vbox-attach-iso.sh
 
 vbox-screenshot:
-	@./testing/vbox-screenshot.sh
+	@$(RUN) testing/vbox-screenshot.sh
 
 vbox-logs:
-	@./testing/vbox-collect-logs.sh
+	@$(RUN) testing/vbox-collect-logs.sh
 
 vbox-clean:
-	@./testing/vbox-clean.sh
+	@$(RUN) testing/vbox-clean.sh
 
 vbox-test:
-	@./testing/vbox-full-live-test.sh
+	@$(RUN) testing/vbox-full-live-test.sh
 
 clean:
-	@./scripts/03-clean.sh light
+	@$(RUN) scripts/03-clean.sh light
 
 clean-full:
-	@./scripts/03-clean.sh full
+	@$(RUN) scripts/03-clean.sh full
 
 show-config:
 	@cat build-config/nexos.conf
