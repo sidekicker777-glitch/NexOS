@@ -15,57 +15,60 @@ ensure_dir "$ISO_DIR"
 ensure_dir "$LOG_DIR"
 
 log "Preparing fresh live-build configuration."
-# Use bash explicitly so Windows/GitHub web uploads cannot break this by
-# stripping Linux executable permissions from scripts. Use BUILD_SCRIPT_DIR
-# because common.sh defines its own SCRIPT_DIR for the shared library folder.
 bash "$BUILD_SCRIPT_DIR/02-init-live-build.sh"
 
-log "Injecting Part 4 desktop polish and forced live login."
+log "Injecting Part 5 security center, guarded open-source tools, and forced live login."
 
-# Add Part 4 desktop/app packages after the base config is generated.
-cat > "$LB_CONFIG_DIR/package-lists/40-nexos-desktop-polish.list.chroot" <<'PKGS'
-# NexOS Part 4: desktop polish, beginner tools, and app defaults.
-xfce4-whiskermenu-plugin
-xfce4-power-manager
-xfce4-goodies
-arc-theme
-papirus-icon-theme
-fonts-dejavu
-fonts-liberation
-fonts-noto-core
-fonts-noto-color-emoji
+cat > "$LB_CONFIG_DIR/package-lists/40-nexos-part5-safe-security.list.chroot" <<'PKGS'
+# NexOS Part 5: safe security/open-source extras.
+ufw
+apparmor
+apparmor-utils
+auditd
+aide
+bubblewrap
+firejail
+lynis
+clamav
+clamav-freshclam
+rkhunter
 zenity
-rofi
 catfish
-gparted
-baobab
-neofetch
-fastfetch
-pciutils
-usbutils
-lshw
-inxi
 geany
-geany-plugins
 meld
-ristretto
 vlc
 libreoffice-writer
 libreoffice-calc
 libreoffice-impress
-simple-scan
 cups
 system-config-printer
+fonts-noto-core
+fonts-noto-color-emoji
+papirus-icon-theme
+arc-theme
 PKGS
 
-# This hook runs inside the live filesystem and creates a nicer Windows-like XFCE layout.
-cat > "$LB_CONFIG_DIR/hooks/normal/020-nexos-part4-desktop.hook.chroot" <<HOOK
+cat > "$LB_CONFIG_DIR/hooks/normal/020-nexos-part5-security-desktop.hook.chroot" <<HOOK
 #!/usr/bin/env bash
 set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
 
 LIVE_USERNAME="$LIVE_USERNAME"
 LIVE_FULLNAME="$LIVE_FULLNAME"
 LIVE_PASSWORD="$LIVE_USERNAME"
+
+# Optional packages are guarded so one renamed/missing package will not break the ISO.
+optional_packages=(
+  xfce4-whiskermenu-plugin xfce4-power-manager xfce4-goodies rofi baobab
+  fastfetch neofetch pciutils usbutils lshw inxi geany-plugins gparted simple-scan
+  openscap-scanner scap-security-guide
+)
+apt-get update || true
+for pkg in "\${optional_packages[@]}"; do
+  if apt-cache show "\$pkg" >/dev/null 2>&1; then
+    apt-get install -y --no-install-recommends "\$pkg" || true
+  fi
+done
 
 if ! id "\$LIVE_USERNAME" >/dev/null 2>&1; then
   useradd -m -s /bin/bash -c "\$LIVE_FULLNAME" "\$LIVE_USERNAME"
@@ -73,11 +76,8 @@ fi
 
 echo "\$LIVE_USERNAME:\$LIVE_PASSWORD" | chpasswd
 usermod -U "\$LIVE_USERNAME" 2>/dev/null || true
-
 for group in sudo audio video plugdev netdev users cdrom lpadmin scanner bluetooth; do
-  if getent group "\$group" >/dev/null 2>&1; then
-    usermod -aG "\$group" "\$LIVE_USERNAME" || true
-  fi
+  getent group "\$group" >/dev/null 2>&1 && usermod -aG "\$group" "\$LIVE_USERNAME" || true
 done
 
 mkdir -p /etc/lightdm/lightdm.conf.d
@@ -90,26 +90,57 @@ user-session=xfce
 greeter-session=lightdm-gtk-greeter
 LIGHTDM
 
-# Make the ISO easy to test even if autologin does not fire.
-mkdir -p "/home/\$LIVE_USERNAME/Desktop" "/home/\$LIVE_USERNAME/.config/autostart" "/home/\$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml" "/home/\$LIVE_USERNAME/.local/share/applications"
-cat > "/home/\$LIVE_USERNAME/Desktop/README-NexOS-Login.txt" <<README
-NexOS live login:
-Username: $LIVE_USERNAME
-Password: $LIVE_USERNAME
+echo Basic > /etc/nexos-security-profile
 
-Autologin should start automatically. If the login screen appears, use the credentials above.
-README
+cat > /usr/local/bin/nexos-security-center <<'SECURITY'
+#!/usr/bin/env bash
+set -euo pipefail
+
+pause(){ read -rp "Press Enter to continue..." _; }
+header(){ clear || true; echo "NexOS Security Center"; echo "====================="; echo; }
+status(){ header; echo "Profile: $(cat /etc/nexos-security-profile 2>/dev/null || echo Basic)"; echo; echo "Firewall:"; command -v ufw >/dev/null && sudo ufw status || echo "UFW not installed"; echo; echo "AppArmor:"; command -v aa-status >/dev/null && sudo aa-status || echo "AppArmor tools not installed"; echo; pause; }
+basic(){ echo Basic | sudo tee /etc/nexos-security-profile >/dev/null; command -v ufw >/dev/null && sudo ufw --force enable >/dev/null 2>&1 || true; echo "Basic profile applied."; }
+enhanced(){ echo Enhanced | sudo tee /etc/nexos-security-profile >/dev/null; command -v ufw >/dev/null && sudo ufw default deny incoming >/dev/null 2>&1 || true; command -v ufw >/dev/null && sudo ufw default allow outgoing >/dev/null 2>&1 || true; command -v ufw >/dev/null && sudo ufw --force enable >/dev/null 2>&1 || true; command -v aa-enforce >/dev/null && sudo aa-enforce /etc/apparmor.d/* >/dev/null 2>&1 || true; echo "Enhanced profile applied."; }
+maximum(){ echo Maximum | sudo tee /etc/nexos-security-profile >/dev/null; enhanced >/dev/null 2>&1 || true; command -v freshclam >/dev/null && sudo freshclam || true; echo "Maximum profile staged. Full hardening is for the installed build."; }
+report(){ header; command -v lynis >/dev/null && sudo lynis audit system --quick || echo "Lynis not installed."; pause; }
+
+while true; do
+  header
+  echo "1) Show security status"
+  echo "2) Apply Basic profile"
+  echo "3) Apply Enhanced profile"
+  echo "4) Apply Maximum profile"
+  echo "5) Run quick security report"
+  echo "6) Exit"
+  echo
+  read -rp "Choose: " c
+  case "$c" in
+    1) status;; 2) basic; pause;; 3) enhanced; pause;; 4) maximum; pause;; 5) report;; 6) exit 0;; *) echo "Invalid"; sleep 1;;
+  esac
+done
+SECURITY
+chmod 0755 /usr/local/bin/nexos-security-center
 
 cat > /usr/local/bin/nexos-welcome <<'WELCOME'
 #!/usr/bin/env bash
 set -euo pipefail
-zenity --info \
-  --title="Welcome to NexOS" \
-  --width=560 \
-  --height=330 \
-  --text="<b>Welcome to NexOS Origin</b>\n\nThis is the Part 4 desktop polish build.\n\nLogin: nexos / nexos\n\nIncluded starter tools:\n• File manager and archive tools\n• Firefox ESR\n• Geany code editor\n• LibreOffice basics\n• GParted, system info, and printer tools\n\nOpen Terminal and run: nexos-info" || true
+zenity --info --title="Welcome to NexOS" --width=620 --height=390 --text="<b>Welcome to NexOS Origin</b>\n\nPart 5 adds a security center and more open-source tools.\n\nLogin: nexos / nexos\n\nTry:\n  nexos-info\n  nexos-security-center\n  nexos-system-report" || true
 WELCOME
 chmod 0755 /usr/local/bin/nexos-welcome
+
+cat > /usr/local/bin/nexos-system-report <<'REPORT'
+#!/usr/bin/env bash
+set -euo pipefail
+{ echo "NexOS System Report"; echo "==================="; date; echo; nexos-info || true; echo; uname -a; echo; command -v fastfetch >/dev/null && fastfetch || true; command -v neofetch >/dev/null && neofetch || true; } | less
+REPORT
+chmod 0755 /usr/local/bin/nexos-system-report
+
+mkdir -p "/home/\$LIVE_USERNAME/Desktop" "/home/\$LIVE_USERNAME/.config/autostart" "/home/\$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml"
+cat > "/home/\$LIVE_USERNAME/Desktop/README-NexOS-Login.txt" <<README
+NexOS live login:
+Username: $LIVE_USERNAME
+Password: $LIVE_USERNAME
+README
 
 cat > "/home/\$LIVE_USERNAME/.config/autostart/nexos-welcome.desktop" <<'DESKTOP'
 [Desktop Entry]
@@ -120,11 +151,21 @@ Terminal=false
 X-GNOME-Autostart-enabled=true
 DESKTOP
 
+cat > "/home/\$LIVE_USERNAME/Desktop/NexOS Security Center.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=NexOS Security Center
+Exec=xfce4-terminal --command=nexos-security-center
+Icon=security-high
+Terminal=false
+Categories=System;Security;
+DESKTOP
+chmod 0755 "/home/\$LIVE_USERNAME/Desktop/NexOS Security Center.desktop"
+
 cat > "/home/\$LIVE_USERNAME/Desktop/NexOS Welcome.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
 Name=NexOS Welcome
-Comment=Open the NexOS welcome screen
 Exec=nexos-welcome
 Icon=dialog-information
 Terminal=false
@@ -154,6 +195,26 @@ Categories=Development;
 DESKTOP
 chmod 0755 "/home/\$LIVE_USERNAME/Desktop/Code Editor.desktop"
 
+cat > /usr/share/applications/nexos-security-center.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=NexOS Security Center
+Exec=xfce4-terminal --command=nexos-security-center
+Icon=security-high
+Terminal=false
+Categories=System;Security;
+DESKTOP
+
+cat > /usr/share/applications/nexos-system-report.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=NexOS System Report
+Exec=xfce4-terminal --command=nexos-system-report
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;
+DESKTOP
+
 cat > "/home/\$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml" <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xsettings" version="1.0">
@@ -161,122 +222,33 @@ cat > "/home/\$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.
     <property name="ThemeName" type="string" value="Arc-Dark"/>
     <property name="IconThemeName" type="string" value="Papirus-Dark"/>
   </property>
-  <property name="Gtk" type="empty">
-    <property name="FontName" type="string" value="Noto Sans 10"/>
-    <property name="MonospaceFontName" type="string" value="DejaVu Sans Mono 10"/>
-  </property>
 </channel>
 XML
 
-cat > "/home/\$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<channel name="xfce4-panel" version="1.0">
-  <property name="configver" type="int" value="2"/>
-  <property name="panels" type="array">
-    <value type="int" value="1"/>
-    <property name="panel-1" type="empty">
-      <property name="position" type="string" value="p=10;x=0;y=0"/>
-      <property name="length" type="uint" value="100"/>
-      <property name="position-locked" type="bool" value="true"/>
-      <property name="size" type="uint" value="42"/>
-      <property name="plugin-ids" type="array">
-        <value type="int" value="1"/>
-        <value type="int" value="2"/>
-        <value type="int" value="3"/>
-        <value type="int" value="4"/>
-        <value type="int" value="5"/>
-        <value type="int" value="6"/>
-      </property>
-    </property>
-  </property>
-  <property name="plugins" type="empty">
-    <property name="plugin-1" type="string" value="whiskermenu"/>
-    <property name="plugin-2" type="string" value="tasklist"/>
-    <property name="plugin-3" type="string" value="separator">
-      <property name="expand" type="bool" value="true"/>
-      <property name="style" type="uint" value="0"/>
-    </property>
-    <property name="plugin-4" type="string" value="systray"/>
-    <property name="plugin-5" type="string" value="pulseaudio"/>
-    <property name="plugin-6" type="string" value="clock"/>
-  </property>
-</channel>
-XML
-
-cat > "/home/\$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<channel name="xfce4-desktop" version="1.0">
-  <property name="desktop-icons" type="empty">
-    <property name="style" type="int" value="2"/>
-  </property>
-  <property name="backdrop" type="empty">
-    <property name="screen0" type="empty">
-      <property name="monitorVirtual1" type="empty">
-        <property name="workspace0" type="empty">
-          <property name="last-image" type="string" value="/usr/share/backgrounds/nexos/nexos-origin.svg"/>
-          <property name="image-style" type="int" value="5"/>
-        </property>
-      </property>
-    </property>
-  </property>
-</channel>
-XML
-
-cat > /usr/local/bin/nexos-system-report <<'REPORT'
-#!/usr/bin/env bash
-set -euo pipefail
-{
-  echo "NexOS System Report"
-  echo "==================="
-  date
-  echo
-  nexos-info || true
-  echo
-  uname -a
-  echo
-  command -v fastfetch >/dev/null 2>&1 && fastfetch || true
-} | less
-REPORT
-chmod 0755 /usr/local/bin/nexos-system-report
-
-cat > /usr/share/applications/nexos-system-report.desktop <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=NexOS System Report
-Comment=Show NexOS system information
-Exec=xfce4-terminal --command=nexos-system-report
-Icon=utilities-system-monitor
-Terminal=false
-Categories=System;
-DESKTOP
-
-# Copy current defaults into /etc/skel so future live user resets match.
+chown -R "\$LIVE_USERNAME:\$LIVE_USERNAME" "/home/\$LIVE_USERNAME"
 mkdir -p /etc/skel
 rsync -a "/home/\$LIVE_USERNAME/" /etc/skel/ || true
-chown -R "\$LIVE_USERNAME:\$LIVE_USERNAME" "/home/\$LIVE_USERNAME"
-chmod 0755 "/home/\$LIVE_USERNAME/Desktop" || true
 
 if command -v systemctl >/dev/null 2>&1; then
   systemctl enable NetworkManager.service 2>/dev/null || true
   systemctl enable lightdm.service 2>/dev/null || true
   systemctl enable cups.service 2>/dev/null || true
+  systemctl enable apparmor.service 2>/dev/null || true
+  systemctl enable auditd.service 2>/dev/null || true
 fi
 HOOK
-chmod 0755 "$LB_CONFIG_DIR/hooks/normal/020-nexos-part4-desktop.hook.chroot"
+chmod 0755 "$LB_CONFIG_DIR/hooks/normal/020-nexos-part5-security-desktop.hook.chroot"
 
 log "Starting live-build. This downloads Debian packages and may take a while."
 log "Target ISO: $ARTIFACT_ISO"
 
 pushd "$LIVE_BUILD_DIR" >/dev/null
-
-# Keep the build log even if live-build fails.
-BUILD_LOG="$LOG_DIR/live-build-part4.log"
+BUILD_LOG="$LOG_DIR/live-build-part5.log"
 if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
   lb build 2>&1 | tee "$BUILD_LOG"
 else
   sudo lb build 2>&1 | tee "$BUILD_LOG"
 fi
-
 popd >/dev/null
 
 candidate="$(find "$LIVE_BUILD_DIR" -maxdepth 1 -type f \( -name '*.iso' -o -name '*.hybrid.iso' \) -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2- || true)"
@@ -290,4 +262,3 @@ sha256sum "$ARTIFACT_ISO" > "$ARTIFACT_ISO.sha256"
 success "ISO built: $ARTIFACT_ISO"
 success "Checksum: $ARTIFACT_ISO.sha256"
 log "Run: make validate-iso"
-log "Optional quick boot test: make qemu-test"
