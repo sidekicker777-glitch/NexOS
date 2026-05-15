@@ -1,0 +1,2 @@
+# NexOS live mode convenience. Installed systems will get stricter defaults later.
+%sudo ALL=(ALL:ALL) NOPASSWD: ALL
