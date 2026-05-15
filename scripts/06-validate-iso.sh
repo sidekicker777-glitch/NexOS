@@ -11,11 +11,17 @@ case "$NEXOS_EDITION" in
   main)
     TARGET_ISO="$ARTIFACT_ISO"
     ;;
+  tools)
+    TARGET_ISO="$ISO_DIR/${ISO_IMAGE_NAME%.iso}-tools.iso"
+    ;;
+  creator)
+    TARGET_ISO="$ISO_DIR/${ISO_IMAGE_NAME%.iso}-creator.iso"
+    ;;
   security)
     TARGET_ISO="$ISO_DIR/${ISO_IMAGE_NAME%.iso}-security.iso"
     ;;
   *)
-    fail "Invalid NEXOS_EDITION='$NEXOS_EDITION'. Use: main or security"
+    fail "Invalid NEXOS_EDITION='$NEXOS_EDITION'. Use: main, tools, creator, or security"
     ;;
 esac
 
