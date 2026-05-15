@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=NexOS Info
-Comment=Show NexOS live build information
-Exec=xfce4-terminal --hold --command=nexos-info
-Icon=computer
-Terminal=false
-Categories=System;

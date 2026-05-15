@@ -1,7 +1,0 @@
-NAME="NexOS"
-ID=nexos
-VERSION="0.2.0-part2"
-VERSION_CODENAME="Origin"
-BASE_VENDOR="debian"
-BASE_CODENAME="trixie"
-ARCH="amd64"

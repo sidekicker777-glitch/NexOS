@@ -1,4 +1,0 @@
-NexOS is an original Linux-based operating system project.
-Do not include copied Windows, Batocera, Microsoft, Xbox, Steam, PlayStation, Nintendo, or other protected branding/assets.
-Do not include copyrighted ROMs, BIOS files, commercial games, cracked software, or illegal downloads.
-Only add software, artwork, games, ROMs, BIOS files, and firmware that you are legally allowed to use and redistribute.

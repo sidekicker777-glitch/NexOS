@@ -1,5 +1,0 @@
-# NexOS Part 2: virtual machine helper packages.
-# VirtualBox guest X11 packages are not listed here because Debian stable may not ship them in all configurations.
-# Part 20 will add stronger VirtualBox guest support once the base ISO is stable.
-spice-vdagent
-qemu-guest-agent
