@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds a bootable NexOS live ISO using Debian live-build.
 # Editions:
-#   main     = normal NexOS desktop without extra security stack
-#   security = NexOS desktop plus security-center tools
+#   main     = normal NexOS desktop
+#   creator  = NexOS desktop plus open-source creative tools such as Blender
+#   security = NexOS desktop plus optional security-center tools
 
 set -Eeuo pipefail
 BUILD_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,18 +18,25 @@ require_cmd sed
 
 NEXOS_EDITION="${NEXOS_EDITION:-main}"
 case "$NEXOS_EDITION" in
-  main|security) ;;
-  *) fail "Invalid NEXOS_EDITION='$NEXOS_EDITION'. Use: main or security" ;;
+  main|creator|security) ;;
+  *) fail "Invalid NEXOS_EDITION='$NEXOS_EDITION'. Use: main, creator, or security" ;;
 esac
 
 BASE_ISO_NAME="${ISO_IMAGE_NAME%.iso}"
-if [[ "$NEXOS_EDITION" == "main" ]]; then
-  OUTPUT_ISO="$ARTIFACT_ISO"
-  EDITION_LABEL="NexOS Main"
-else
-  OUTPUT_ISO="$ISO_DIR/${BASE_ISO_NAME}-security.iso"
-  EDITION_LABEL="NexOS Security"
-fi
+case "$NEXOS_EDITION" in
+  main)
+    OUTPUT_ISO="$ARTIFACT_ISO"
+    EDITION_LABEL="NexOS Main"
+    ;;
+  creator)
+    OUTPUT_ISO="$ISO_DIR/${BASE_ISO_NAME}-creator.iso"
+    EDITION_LABEL="NexOS Creator"
+    ;;
+  security)
+    OUTPUT_ISO="$ISO_DIR/${BASE_ISO_NAME}-security.iso"
+    EDITION_LABEL="NexOS Security"
+    ;;
+esac
 
 ensure_dir "$ISO_DIR"
 ensure_dir "$LOG_DIR"
@@ -40,10 +48,10 @@ if [[ -d "$LIVE_BUILD_DIR/config" ]]; then
 fi
 bash "$BUILD_SCRIPT_DIR/02-init-live-build.sh"
 
-log "Injecting $EDITION_LABEL desktop polish and forced live login."
+log "Injecting $EDITION_LABEL packages and NexOS integration."
 
-cat > "$LB_CONFIG_DIR/package-lists/40-nexos-main-desktop-tools.list.chroot" <<'PKGS'
-# NexOS main desktop/open-source tools. No extra security stack here.
+cat > "$LB_CONFIG_DIR/package-lists/40-nexos-common-tools.list.chroot" <<'PKGS'
+# NexOS common open-source desktop tools.
 zenity
 catfish
 geany
@@ -60,9 +68,26 @@ papirus-icon-theme
 arc-theme
 PKGS
 
+if [[ "$NEXOS_EDITION" == "creator" ]]; then
+  cat > "$LB_CONFIG_DIR/package-lists/50-nexos-creator-tools.list.chroot" <<'PKGS'
+# NexOS Creator edition open-source tools.
+blender
+gimp
+inkscape
+krita
+audacity
+kdenlive
+obs-studio
+ffmpeg
+lmms
+ardour
+handbrake
+PKGS
+fi
+
 if [[ "$NEXOS_EDITION" == "security" ]]; then
   cat > "$LB_CONFIG_DIR/package-lists/50-nexos-security-tools.list.chroot" <<'PKGS'
-# NexOS Security edition tools.
+# NexOS Security edition open-source tools.
 ufw
 apparmor
 apparmor-utils
@@ -77,7 +102,7 @@ rkhunter
 PKGS
 fi
 
-cat > "$LB_CONFIG_DIR/hooks/normal/020-nexos-edition-desktop.hook.chroot" <<'HOOK'
+cat > "$LB_CONFIG_DIR/hooks/normal/020-nexos-edition-integration.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -88,25 +113,27 @@ LIVE_PASSWORD="__LIVE_USERNAME__"
 NEXOS_EDITION="__NEXOS_EDITION__"
 EDITION_LABEL="__EDITION_LABEL__"
 
-# Optional packages are guarded so one renamed/missing package will not break the ISO.
-main_optional_packages=(
-  xfce4-whiskermenu-plugin xfce4-power-manager xfce4-goodies rofi baobab
-  fastfetch neofetch pciutils usbutils lshw inxi geany-plugins gparted simple-scan
-)
-security_optional_packages=(openscap-scanner scap-security-guide)
-
-apt-get update || true
-for pkg in "${main_optional_packages[@]}"; do
+install_if_available() {
+  local pkg="$1"
   if apt-cache show "$pkg" >/dev/null 2>&1; then
     apt-get install -y --no-install-recommends "$pkg" || true
   fi
+}
+
+apt-get update || true
+for pkg in xfce4-whiskermenu-plugin xfce4-power-manager xfce4-goodies rofi baobab fastfetch neofetch pciutils usbutils lshw inxi geany-plugins gparted simple-scan; do
+  install_if_available "$pkg"
 done
 
+if [[ "$NEXOS_EDITION" == "creator" ]]; then
+  for pkg in blender gimp inkscape krita audacity kdenlive obs-studio ffmpeg lmms ardour handbrake; do
+    install_if_available "$pkg"
+  done
+fi
+
 if [[ "$NEXOS_EDITION" == "security" ]]; then
-  for pkg in "${security_optional_packages[@]}"; do
-    if apt-cache show "$pkg" >/dev/null 2>&1; then
-      apt-get install -y --no-install-recommends "$pkg" || true
-    fi
+  for pkg in openscap-scanner scap-security-guide; do
+    install_if_available "$pkg"
   done
 fi
 
@@ -148,18 +175,42 @@ set -euo pipefail
 REPORT
 chmod 0755 /usr/local/bin/nexos-system-report
 
-cat > /usr/local/bin/nexos-welcome <<'WELCOME'
+cat > /usr/local/bin/nexos-studio <<'STUDIO'
 #!/usr/bin/env bash
 set -euo pipefail
-EDITION="__EDITION_LABEL__"
-if [[ "__NEXOS_EDITION__" == "security" ]]; then
-  EXTRA="Security edition tools are included. Try: nexos-security-center"
-else
-  EXTRA="This is the clean main edition without the extra security stack."
+apps=(
+  "Blender|blender|3D modeling, animation, rendering"
+  "GIMP|gimp|Image editing"
+  "Inkscape|inkscape|Vector graphics"
+  "Krita|krita|Digital painting"
+  "Audacity|audacity|Audio editing"
+  "Kdenlive|kdenlive|Video editing"
+  "OBS Studio|obs|Recording and streaming"
+  "VLC|vlc|Media playback"
+)
+menu_items=()
+for row in "${apps[@]}"; do
+  IFS='|' read -r name cmd desc <<< "$row"
+  command -v "$cmd" >/dev/null 2>&1 && menu_items+=("$name" "$desc")
+done
+if (( ${#menu_items[@]} == 0 )); then
+  zenity --info --title="NexOS Studio" --text="No studio apps are installed in this edition yet." || true
+  exit 0
 fi
-zenity --info --title="Welcome to NexOS" --width=620 --height=390 --text="<b>Welcome to $EDITION</b>\n\nLogin: nexos / nexos\n\n$EXTRA\n\nTry:\n  nexos-info\n  nexos-system-report" || true
-WELCOME
-chmod 0755 /usr/local/bin/nexos-welcome
+choice="$(zenity --list --title="NexOS Studio" --width=650 --height=420 --column="App" --column="Purpose" "${menu_items[@]}" || true)"
+[[ -n "$choice" ]] || exit 0
+case "$choice" in
+  Blender) blender >/dev/null 2>&1 & ;;
+  GIMP) gimp >/dev/null 2>&1 & ;;
+  Inkscape) inkscape >/dev/null 2>&1 & ;;
+  Krita) krita >/dev/null 2>&1 & ;;
+  Audacity) audacity >/dev/null 2>&1 & ;;
+  Kdenlive) kdenlive >/dev/null 2>&1 & ;;
+  "OBS Studio") obs >/dev/null 2>&1 & ;;
+  VLC) vlc >/dev/null 2>&1 & ;;
+esac
+STUDIO
+chmod 0755 /usr/local/bin/nexos-studio
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
   echo Basic > /etc/nexos-security-profile
@@ -168,28 +219,24 @@ if [[ "$NEXOS_EDITION" == "security" ]]; then
 set -euo pipefail
 pause(){ read -rp "Press Enter to continue..." _; }
 header(){ clear || true; echo "NexOS Security Center"; echo "====================="; echo; }
-status(){ header; echo "Profile: $(cat /etc/nexos-security-profile 2>/dev/null || echo Basic)"; echo; echo "Firewall:"; command -v ufw >/dev/null && sudo ufw status || echo "UFW not installed"; echo; echo "AppArmor:"; command -v aa-status >/dev/null && sudo aa-status || echo "AppArmor tools not installed"; echo; pause; }
-basic(){ echo Basic | sudo tee /etc/nexos-security-profile >/dev/null; command -v ufw >/dev/null && sudo ufw --force enable >/dev/null 2>&1 || true; echo "Basic profile applied."; }
-enhanced(){ echo Enhanced | sudo tee /etc/nexos-security-profile >/dev/null; command -v ufw >/dev/null && sudo ufw default deny incoming >/dev/null 2>&1 || true; command -v ufw >/dev/null && sudo ufw default allow outgoing >/dev/null 2>&1 || true; command -v ufw >/dev/null && sudo ufw --force enable >/dev/null 2>&1 || true; command -v aa-enforce >/dev/null && sudo aa-enforce /etc/apparmor.d/* >/dev/null 2>&1 || true; echo "Enhanced profile applied."; }
-maximum(){ echo Maximum | sudo tee /etc/nexos-security-profile >/dev/null; enhanced >/dev/null 2>&1 || true; command -v freshclam >/dev/null && sudo freshclam || true; echo "Maximum profile staged. Full hardening is for the installed build."; }
-report(){ header; command -v lynis >/dev/null && sudo lynis audit system --quick || echo "Lynis not installed."; pause; }
-while true; do
-  header
-  echo "1) Show security status"
-  echo "2) Apply Basic profile"
-  echo "3) Apply Enhanced profile"
-  echo "4) Apply Maximum profile"
-  echo "5) Run quick security report"
-  echo "6) Exit"
-  echo
-  read -rp "Choose: " c
-  case "$c" in
-    1) status;; 2) basic; pause;; 3) enhanced; pause;; 4) maximum; pause;; 5) report;; 6) exit 0;; *) echo "Invalid"; sleep 1;;
-  esac
-done
+status(){ header; echo "Profile: $(cat /etc/nexos-security-profile 2>/dev/null || echo Basic)"; echo; command -v ufw >/dev/null && sudo ufw status || true; echo; command -v aa-status >/dev/null && sudo aa-status || true; pause; }
+while true; do header; echo "1) Show security status"; echo "2) Exit"; read -rp "Choose: " c; case "$c" in 1) status;; 2) exit 0;; esac; done
 SECURITY
   chmod 0755 /usr/local/bin/nexos-security-center
 fi
+
+cat > /usr/local/bin/nexos-welcome <<'WELCOME'
+#!/usr/bin/env bash
+set -euo pipefail
+EDITION="__EDITION_LABEL__"
+case "__NEXOS_EDITION__" in
+  creator) EXTRA="Creator edition integrates open-source creative apps for NexOS. Try: nexos-studio" ;;
+  security) EXTRA="Security edition tools are included. Try: nexos-security-center" ;;
+  *) EXTRA="This is the clean main NexOS edition. Creator and security stacks are separate builds." ;;
+esac
+zenity --info --title="Welcome to NexOS" --width=650 --height=390 --text="<b>Welcome to $EDITION</b>\n\nThis is your own NexOS operating system. Open-source apps are integrated as NexOS tools and launchers.\n\nLogin: nexos / nexos\n\n$EXTRA\n\nTry:\n  nexos-info\n  nexos-system-report\n  nexos-studio" || true
+WELCOME
+chmod 0755 /usr/local/bin/nexos-welcome
 
 mkdir -p "/home/$LIVE_USERNAME/Desktop" "/home/$LIVE_USERNAME/.config/autostart" "/home/$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml"
 cat > "/home/$LIVE_USERNAME/Desktop/README-NexOS-Login.txt" <<README
@@ -219,6 +266,17 @@ Categories=System;
 DESKTOP
 chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Welcome.desktop"
 
+cat > "/home/$LIVE_USERNAME/Desktop/NexOS Studio.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=NexOS Studio
+Exec=nexos-studio
+Icon=applications-graphics
+Terminal=false
+Categories=Graphics;AudioVideo;
+DESKTOP
+chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Studio.desktop"
+
 cat > "/home/$LIVE_USERNAME/Desktop/File Manager.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -241,6 +299,16 @@ Categories=Development;
 DESKTOP
 chmod 0755 "/home/$LIVE_USERNAME/Desktop/Code Editor.desktop"
 
+cat > /usr/share/applications/nexos-studio.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=NexOS Studio
+Exec=nexos-studio
+Icon=applications-graphics
+Terminal=false
+Categories=Graphics;AudioVideo;
+DESKTOP
+
 cat > /usr/share/applications/nexos-system-report.desktop <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -262,15 +330,6 @@ Terminal=false
 Categories=System;Security;
 DESKTOP
   chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Security Center.desktop"
-  cat > /usr/share/applications/nexos-security-center.desktop <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=NexOS Security Center
-Exec=xfce4-terminal --command=nexos-security-center
-Icon=security-high
-Terminal=false
-Categories=System;Security;
-DESKTOP
 fi
 
 cat > "/home/$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml" <<'XML'
@@ -303,8 +362,8 @@ sed -i \
   -e "s/__LIVE_FULLNAME__/$LIVE_FULLNAME/g" \
   -e "s/__NEXOS_EDITION__/$NEXOS_EDITION/g" \
   -e "s/__EDITION_LABEL__/$EDITION_LABEL/g" \
-  "$LB_CONFIG_DIR/hooks/normal/020-nexos-edition-desktop.hook.chroot"
-chmod 0755 "$LB_CONFIG_DIR/hooks/normal/020-nexos-edition-desktop.hook.chroot"
+  "$LB_CONFIG_DIR/hooks/normal/020-nexos-edition-integration.hook.chroot"
+chmod 0755 "$LB_CONFIG_DIR/hooks/normal/020-nexos-edition-integration.hook.chroot"
 
 log "Starting live-build. This downloads Debian packages and may take a while."
 log "Target ISO: $OUTPUT_ISO"
