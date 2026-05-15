@@ -2,9 +2,9 @@
 # Builds the first bootable NexOS live ISO using Debian live-build.
 
 set -Eeuo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUILD_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
-source "$SCRIPT_DIR/lib/common.sh"
+source "$BUILD_SCRIPT_DIR/lib/common.sh"
 
 require_cmd lb
 require_cmd tee
@@ -16,8 +16,9 @@ ensure_dir "$LOG_DIR"
 
 log "Preparing fresh live-build configuration."
 # Use bash explicitly so Windows/GitHub web uploads cannot break this by
-# stripping Linux executable permissions from scripts.
-bash "$SCRIPT_DIR/02-init-live-build.sh"
+# stripping Linux executable permissions from scripts. Use BUILD_SCRIPT_DIR
+# because common.sh defines its own SCRIPT_DIR for the shared library folder.
+bash "$BUILD_SCRIPT_DIR/02-init-live-build.sh"
 
 log "Starting live-build. This downloads Debian packages and may take a while."
 log "Target ISO: $ARTIFACT_ISO"
