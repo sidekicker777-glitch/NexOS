@@ -7,7 +7,7 @@ SHELL := /usr/bin/env bash
 # cannot break the build by removing Linux executable bits.
 RUN := bash
 
-.PHONY: help check deps init iso validate-iso qemu-test part1-verify part2-verify part3-verify part3-cloud-verify vbox-create vbox-start vbox-stop vbox-reset vbox-status vbox-attach-iso vbox-screenshot vbox-logs vbox-clean vbox-test clean clean-full show-config
+.PHONY: help check deps init iso iso-main iso-security validate-iso validate-iso-main validate-iso-security qemu-test part1-verify part2-verify part3-verify part3-cloud-verify vbox-create vbox-start vbox-stop vbox-reset vbox-status vbox-attach-iso vbox-screenshot vbox-logs vbox-clean vbox-test clean clean-full show-config
 
 help:
 	@echo "NexOS Build System"
@@ -18,9 +18,15 @@ help:
 	@echo "  make init           Generate/refresh live-build config"
 	@echo "  make part1-verify   Verify Part 1 foundation files"
 	@echo ""
+	@echo "ISO editions:"
+	@echo "  make iso            Build the normal main NexOS ISO"
+	@echo "  make iso-main       Build the normal main NexOS ISO"
+	@echo "  make iso-security   Build the optional security-tool NexOS ISO"
+	@echo "  make validate-iso   Validate the normal main NexOS ISO"
+	@echo "  make validate-iso-main Validate the normal main NexOS ISO"
+	@echo "  make validate-iso-security Validate the optional security-tool ISO"
+	@echo ""
 	@echo "Part 2 commands:"
-	@echo "  make iso            Build the first bootable NexOS live ISO"
-	@echo "  make validate-iso   Validate ISO artifact and checksum"
 	@echo "  make qemu-test      Boot-test the ISO in QEMU if installed"
 	@echo "  make part2-verify   Verify Part 2 files/config without building"
 	@echo ""
@@ -52,10 +58,22 @@ init:
 	@$(RUN) scripts/02-init-live-build.sh
 
 iso:
-	@$(RUN) scripts/05-build-live-iso.sh
+	@NEXOS_EDITION=main $(RUN) scripts/05-build-live-iso.sh
+
+iso-main:
+	@NEXOS_EDITION=main $(RUN) scripts/05-build-live-iso.sh
+
+iso-security:
+	@NEXOS_EDITION=security $(RUN) scripts/05-build-live-iso.sh
 
 validate-iso:
-	@$(RUN) scripts/06-validate-iso.sh
+	@NEXOS_EDITION=main $(RUN) scripts/06-validate-iso.sh
+
+validate-iso-main:
+	@NEXOS_EDITION=main $(RUN) scripts/06-validate-iso.sh
+
+validate-iso-security:
+	@NEXOS_EDITION=security $(RUN) scripts/06-validate-iso.sh
 
 qemu-test:
 	@$(RUN) testing/qemu-live-smoke-test.sh
