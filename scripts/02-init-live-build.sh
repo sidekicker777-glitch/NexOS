@@ -86,7 +86,8 @@ wpasupplicant
 wireless-tools
 gvfs
 gvfs-backends
-policykit-1
+polkitd
+pkexec
 dbus-x11
 pipewire
 pipewire-audio
@@ -108,7 +109,6 @@ file
 zip
 unzip
 7zip
-7zip-rar
 libarchive-tools
 xarchiver
 firefox-esr
