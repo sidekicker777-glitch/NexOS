@@ -68,14 +68,44 @@ jobs:
 
               apt-get update
 
+              # Install only must-have runner packages as hard requirements.
+              # Some Debian package names change or disappear between snapshots,
+              # so optional boot/VM helpers are installed one-by-one below.
               apt-get install -y --no-install-recommends \
                 bash ca-certificates coreutils curl file findutils git grep gzip \
                 live-build debootstrap squashfs-tools xorriso isolinux \
-                syslinux-common syslinux-utils dosfstools mtools parted rsync \
+                syslinux-common mtools parted rsync \
                 make sed tar util-linux sudo
+
+              install_optional_runner_pkg() {
+                local pkg="$1"
+                if apt-cache show "$pkg" >/dev/null 2>&1; then
+                  apt-get install -y --no-install-recommends "$pkg" || true
+                else
+                  echo "Optional runner package not available: $pkg"
+                fi
+              }
+
+              for pkg in syslinux-utils dosfstools; do
+                install_optional_runner_pkg "$pkg"
+              done
 
               # GitHub web uploads can remove Linux executable permissions.
               find scripts testing -type f -name "*.sh" -exec chmod +x {} +
+
+              # Fail early with a clear log if a generated shell script has syntax problems.
+              bash -n scripts/02-init-live-build.sh
+              bash -n scripts/05-build-live-iso.sh
+              bash -n scripts/10-inject-nexos-core-apps.sh
+              bash -n scripts/11-inject-nexos-desktop-polish.sh
+              bash -n scripts/12-inject-nexos-maintenance-tools.sh
+              bash -n scripts/13-inject-nexos-dev-center.sh
+              bash -n scripts/14-inject-nexos-install-center.sh
+              bash -n scripts/15-inject-nexos-visual-polish.sh
+              bash -n scripts/16-inject-nexos-branding-boot.sh
+              bash -n scripts/17-inject-nexos-icons-fix.sh
+              bash -n scripts/18-inject-nexos-desktop-layout.sh
+              bash -n scripts/19-fix-nexos-package-lists.sh
 
               if [[ "$NEXOS_EDITION" == "all" ]]; then
                 make iso-main 2>&1 | tee build/logs/github-actions-main-iso.log
