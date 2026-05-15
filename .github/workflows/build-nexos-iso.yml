@@ -62,51 +62,68 @@ jobs:
             -e NEXOS_EDITION="$EDITION" \
             debian:trixie \
             bash -lc '
-              set -Eeuxo pipefail
+              set -Euxo pipefail
 
               mkdir -p build/logs iso
+              : > build/logs/github-actions-preflight.log
 
-              apt-get update
+              apt-get update 2>&1 | tee -a build/logs/github-actions-preflight.log
 
-              # Install only must-have runner packages as hard requirements.
-              # Some Debian package names change or disappear between snapshots,
-              # so optional boot/VM helpers are installed one-by-one below.
               apt-get install -y --no-install-recommends \
                 bash ca-certificates coreutils curl file findutils git grep gzip \
-                live-build debootstrap squashfs-tools xorriso isolinux \
-                syslinux-common mtools parted rsync \
-                make sed tar util-linux sudo
+                live-build debootstrap squashfs-tools xorriso \
+                make sed tar util-linux sudo 2>&1 | tee -a build/logs/github-actions-preflight.log
 
               install_optional_runner_pkg() {
                 local pkg="$1"
                 if apt-cache show "$pkg" >/dev/null 2>&1; then
-                  apt-get install -y --no-install-recommends "$pkg" || true
+                  apt-get install -y --no-install-recommends "$pkg" 2>&1 | tee -a build/logs/github-actions-preflight.log || true
                 else
-                  echo "Optional runner package not available: $pkg"
+                  echo "Optional runner package not available: $pkg" | tee -a build/logs/github-actions-preflight.log
                 fi
               }
 
-              for pkg in syslinux-utils dosfstools; do
+              for pkg in isolinux syslinux-common syslinux-utils mtools parted rsync dosfstools; do
                 install_optional_runner_pkg "$pkg"
               done
 
+              if ! command -v lb >/dev/null 2>&1; then
+                echo "ERROR: live-build command lb was not installed." | tee -a build/logs/github-actions-preflight.log
+                exit 2
+              fi
+
               # GitHub web uploads can remove Linux executable permissions.
-              find scripts testing -type f -name "*.sh" -exec chmod +x {} +
+              find scripts -type f -name "*.sh" -exec chmod +x {} +
+              if [[ -d testing ]]; then
+                find testing -type f -name "*.sh" -exec chmod +x {} +
+              fi
 
-              # Fail early with a clear log if a generated shell script has syntax problems.
-              bash -n scripts/02-init-live-build.sh
-              bash -n scripts/05-build-live-iso.sh
-              bash -n scripts/10-inject-nexos-core-apps.sh
-              bash -n scripts/11-inject-nexos-desktop-polish.sh
-              bash -n scripts/12-inject-nexos-maintenance-tools.sh
-              bash -n scripts/13-inject-nexos-dev-center.sh
-              bash -n scripts/14-inject-nexos-install-center.sh
-              bash -n scripts/15-inject-nexos-visual-polish.sh
-              bash -n scripts/16-inject-nexos-branding-boot.sh
-              bash -n scripts/17-inject-nexos-icons-fix.sh
-              bash -n scripts/18-inject-nexos-desktop-layout.sh
-              bash -n scripts/19-fix-nexos-package-lists.sh
+              # Syntax check scripts, but do not stop here. If a script is bad,
+              # the full build log will still show exactly where it broke.
+              syntax_failed=0
+              for script in \
+                scripts/02-init-live-build.sh \
+                scripts/05-build-live-iso.sh \
+                scripts/10-inject-nexos-core-apps.sh \
+                scripts/11-inject-nexos-desktop-polish.sh \
+                scripts/12-inject-nexos-maintenance-tools.sh \
+                scripts/13-inject-nexos-dev-center.sh \
+                scripts/14-inject-nexos-install-center.sh \
+                scripts/15-inject-nexos-visual-polish.sh \
+                scripts/16-inject-nexos-branding-boot.sh \
+                scripts/17-inject-nexos-icons-fix.sh \
+                scripts/18-inject-nexos-desktop-layout.sh \
+                scripts/19-fix-nexos-package-lists.sh; do
+                if [[ -f "$script" ]]; then
+                  bash -n "$script" 2>&1 | tee -a build/logs/github-actions-preflight.log || syntax_failed=1
+                else
+                  echo "Missing script: $script" | tee -a build/logs/github-actions-preflight.log
+                  syntax_failed=1
+                fi
+              done
+              echo "syntax_failed=$syntax_failed" | tee -a build/logs/github-actions-preflight.log
 
+              set -e
               if [[ "$NEXOS_EDITION" == "all" ]]; then
                 make iso-main 2>&1 | tee build/logs/github-actions-main-iso.log
                 make validate-iso-main 2>&1 | tee build/logs/github-actions-main-validate.log
