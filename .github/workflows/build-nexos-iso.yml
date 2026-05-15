@@ -10,8 +10,9 @@ on:
         type: choice
         options:
           - main
+          - tools
           - security
-          - both
+          - all
   push:
     branches:
       - main
@@ -38,7 +39,7 @@ jobs:
   build-iso:
     name: Build bootable live ISO
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 240
 
     steps:
       - name: Checkout NexOS source
@@ -76,12 +77,20 @@ jobs:
               # GitHub web uploads can remove Linux executable permissions.
               find scripts testing -type f -name "*.sh" -exec chmod +x {} +
 
-              if [[ "$NEXOS_EDITION" == "both" ]]; then
+              if [[ "$NEXOS_EDITION" == "all" ]]; then
                 make iso-main 2>&1 | tee build/logs/github-actions-main-iso.log
                 make validate-iso-main 2>&1 | tee build/logs/github-actions-main-validate.log
-                make clean 2>&1 | tee build/logs/github-actions-clean-between-editions.log || true
+                make clean 2>&1 | tee build/logs/github-actions-clean-after-main.log || true
+
+                make iso-tools 2>&1 | tee build/logs/github-actions-tools-iso.log
+                make validate-iso-tools 2>&1 | tee build/logs/github-actions-tools-validate.log
+                make clean 2>&1 | tee build/logs/github-actions-clean-after-tools.log || true
+
                 make iso-security 2>&1 | tee build/logs/github-actions-security-iso.log
                 make validate-iso-security 2>&1 | tee build/logs/github-actions-security-validate.log
+              elif [[ "$NEXOS_EDITION" == "tools" ]]; then
+                make iso-tools 2>&1 | tee build/logs/github-actions-tools-iso.log
+                make validate-iso-tools 2>&1 | tee build/logs/github-actions-tools-validate.log
               elif [[ "$NEXOS_EDITION" == "security" ]]; then
                 make iso-security 2>&1 | tee build/logs/github-actions-security-iso.log
                 make validate-iso-security 2>&1 | tee build/logs/github-actions-security-validate.log
