@@ -75,6 +75,13 @@ thunar-archive-plugin
 micro
 neovim
 xdg-utils
+rsync
+pciutils
+usbutils
+iproute2
+iputils-ping
+dnsutils
+traceroute
 PKGS
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
@@ -131,6 +138,8 @@ fi
 bash "$BUILD_SCRIPT_DIR/10-inject-nexos-core-apps.sh"
 # Desktop polish: panel layout, quick help, run/power helpers, shortcuts.
 bash "$BUILD_SCRIPT_DIR/11-inject-nexos-desktop-polish.sh"
+# Maintenance/admin helpers: backup, network, hardware, maintenance center.
+bash "$BUILD_SCRIPT_DIR/12-inject-nexos-maintenance-tools.sh"
 
 cat > "$LB_CONFIG_DIR/hooks/normal/040-nexos-edition-session.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
