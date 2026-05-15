@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Injects NexOS-owned core wrapper apps into live-build config.
-# Used by Main and Security first; Tools also receives them when built.
+# Main and Security get these first. Tools also receives them when built.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,14 +14,15 @@ ensure_dir "$LB_CONFIG_DIR/hooks/normal"
 ensure_dir "$LB_CONFIG_DIR/package-lists"
 
 cat > "$LB_CONFIG_DIR/package-lists/45-nexos-core-wrapper-tools.list.chroot" <<'PKGS'
-# NexOS core wrappers depend on these open-source tools.
+# NexOS core wrapper dependencies.
 zenity
 xarchiver
-p7zip-full
+7zip
 unzip
 zip
 libarchive-tools
 thunar-archive-plugin
+xdg-utils
 PKGS
 
 cat > "$LB_CONFIG_DIR/hooks/normal/030-nexos-core-apps.hook.chroot" <<'HOOK'
@@ -41,24 +42,26 @@ install_if_available() {
 }
 
 apt-get update || true
-for pkg in xarchiver p7zip-full p7zip-rar unzip zip libarchive-tools thunar-archive-plugin; do
+for pkg in xarchiver 7zip unzip zip libarchive-tools thunar-archive-plugin xdg-utils; do
   install_if_available "$pkg"
 done
 
 mkdir -p /usr/share/nexos /usr/local/bin /usr/share/applications
-mkdir -p "/home/$LIVE_USERNAME/Desktop" "/home/$LIVE_USERNAME/.config/autostart" || true
+mkdir -p "/home/$LIVE_USERNAME/Desktop" "/home/$LIVE_USERNAME/.config/autostart" "/home/$LIVE_USERNAME/.config/Thunar" || true
 
 cat > /usr/share/nexos/app-map.txt <<'APPMAP'
 NexOS App Map
 =============
 
 NexOS is its own operating system experience built on legal open-source foundations.
+Open-source apps are configured, wrapped, and organized by NexOS instead of being treated as the OS identity.
 
 Core NexOS wrappers:
 - NexOS Welcome: original NexOS welcome flow.
 - NexOS Control Center: launcher for system settings and NexOS tools.
 - NexOS Code Editor: wrapper around installed open-source editors.
 - NexOS Extractor: simple archive extraction wrapper around open-source archive tools.
+- NexOS Repair Tools: quick desktop repair and troubleshooting actions.
 - NexOS System Report: wrapper around system information tools.
 
 Open-source foundations currently integrated:
@@ -68,6 +71,11 @@ Open-source foundations currently integrated:
 - Geany / Kate / Mousepad / Micro / Neovim: editor foundations where installed.
 - 7zip / libarchive / unzip / tar: archive foundations.
 - Papirus / Arc: visual theme foundations.
+
+Edition focus:
+- Main: clean daily-use NexOS.
+- Security: Main plus security/admin tools.
+- Tools: optional broad tool pack, not the main focus.
 
 Rules:
 - Keep NexOS branding original.
@@ -109,9 +117,12 @@ fi
 [[ -n "$archive" ]] || exit 0
 [[ -f "$archive" ]] || { zenity --error --title="NexOS Extractor" --text="Archive not found:\n$archive" || true; exit 1; }
 
+base_name="$(basename "$archive")"
+default_out="$HOME/Extracted/${base_name%.*}"
 outdir="${2:-}"
 if [[ -z "$outdir" ]]; then
-  outdir="$(pick_folder)"
+  mkdir -p "$default_out"
+  outdir="$(zenity --file-selection --directory --title="NexOS Extractor - Choose output folder" --filename="$default_out/" || true)"
 fi
 [[ -n "$outdir" ]] || exit 0
 mkdir -p "$outdir"
@@ -139,13 +150,38 @@ logfile="/tmp/nexos-extractor-$(date +%s).log"
       ;;
   esac
 } >"$logfile" 2>&1 && {
-  zenity --info --title="NexOS Extractor" --text="Extraction complete.\n\nOutput folder:\n$outdir" || true
+  zenity --question --title="NexOS Extractor" --text="Extraction complete.\n\nOutput folder:\n$outdir\n\nOpen the folder now?" && xdg-open "$outdir" >/dev/null 2>&1 &
 } || {
-  zenity --text-info --title="NexOS Extractor Error" --width=700 --height=450 --filename="$logfile" || true
+  zenity --text-info --title="NexOS Extractor Error" --width=760 --height=480 --filename="$logfile" || true
   exit 1
 }
 EXTRACTOR
 chmod 0755 /usr/local/bin/nexos-extractor
+
+cat > /usr/local/bin/nexos-repair-tools <<'REPAIR'
+#!/usr/bin/env bash
+set -euo pipefail
+entries=(
+  "Desktop|Restart XFCE Panel|restart-panel|Fix missing/frozen taskbar"
+  "Desktop|Restart File Manager|restart-thunar|Fix desktop icons/file manager"
+  "Network|Open Network Settings|network-settings|Edit network connections"
+  "System|Open Terminal|terminal|Open a terminal"
+  "System|System Report|system-report|Show NexOS report"
+  "System|Clean Temp Files|clean-temp|Clean safe temporary user files"
+)
+choice="$(zenity --list --title="NexOS Repair Tools" --width=720 --height=430 --print-column=2 --column="Category" --column="Action" --column="Description" "${entries[@]}" || true)"
+[[ -n "$choice" ]] || exit 0
+case "$choice" in
+  "Restart XFCE Panel") xfce4-panel --restart >/dev/null 2>&1 & ;;
+  "Restart File Manager") thunar -q >/dev/null 2>&1 || true; thunar --daemon >/dev/null 2>&1 & ;;
+  "Open Network Settings") nm-connection-editor >/dev/null 2>&1 & ;;
+  "Open Terminal") xfce4-terminal >/dev/null 2>&1 & ;;
+  "System Report") xfce4-terminal --command=nexos-system-report >/dev/null 2>&1 & ;;
+  "Clean Temp Files") rm -rf "$HOME/.cache/thumbnails"/* /tmp/nexos-* 2>/dev/null || true; zenity --info --title="NexOS Repair Tools" --text="Safe temporary files cleaned." || true ;;
+  *) zenity --warning --title="NexOS Repair Tools" --text="Unknown action: $choice" || true ;;
+esac
+REPAIR
+chmod 0755 /usr/local/bin/nexos-repair-tools
 
 cat > /usr/local/bin/nexos-control-center <<'CONTROL'
 #!/usr/bin/env bash
@@ -163,9 +199,11 @@ entries=(
   "Disks|GParted|gparted|Partition editor when available"
   "NexOS|NexOS Code Editor|nexos-code-editor|Open NexOS editor launcher"
   "NexOS|NexOS Extractor|nexos-extractor|Extract archives"
+  "NexOS|NexOS Repair Tools|nexos-repair-tools|Fix common desktop/session issues"
   "NexOS|NexOS Toolbox|nexos-toolbox|Open optional tool launcher"
   "NexOS|NexOS App Map|nexos-app-map|View open-source foundations"
   "NexOS|NexOS System Report|nexos-system-report|View system report"
+  "Security|NexOS Security Center|nexos-security-center|Open security tools when installed"
 )
 
 menu_items=()
@@ -174,12 +212,15 @@ for row in "${entries[@]}"; do
   command -v "$cmd" >/dev/null 2>&1 && menu_items+=("$category" "$name" "$desc")
 done
 
-choice="$(zenity --list --title="NexOS Control Center" --width=760 --height=520 --column="Category" --column="Tool" --column="Description" "${menu_items[@]}" || true)"
-[[ -n "$choice" ]] || exit 0
-name="$(zenity --entry --title="Open Control Panel" --text="Type the tool name exactly as shown, or cancel.\nSelected category: $choice" || true)"
-[[ -n "$name" ]] || exit 0
+if (( ${#menu_items[@]} == 0 )); then
+  zenity --warning --title="NexOS Control Center" --text="No control center tools are available." || true
+  exit 1
+fi
 
-case "$name" in
+choice="$(zenity --list --title="NexOS Control Center" --width=780 --height=540 --print-column=2 --column="Category" --column="Tool" --column="Description" "${menu_items[@]}" || true)"
+[[ -n "$choice" ]] || exit 0
+
+case "$choice" in
   "Settings Manager") xfce4-settings-manager >/dev/null 2>&1 & ;;
   "Display Settings") xfce4-display-settings >/dev/null 2>&1 & ;;
   Appearance) xfce4-appearance-settings >/dev/null 2>&1 & ;;
@@ -191,13 +232,37 @@ case "$name" in
   GParted) gparted >/dev/null 2>&1 & ;;
   "NexOS Code Editor") nexos-code-editor >/dev/null 2>&1 & ;;
   "NexOS Extractor") nexos-extractor >/dev/null 2>&1 & ;;
+  "NexOS Repair Tools") nexos-repair-tools >/dev/null 2>&1 & ;;
   "NexOS Toolbox") nexos-toolbox >/dev/null 2>&1 & ;;
   "NexOS App Map") nexos-app-map >/dev/null 2>&1 & ;;
   "NexOS System Report") xfce4-terminal --command=nexos-system-report >/dev/null 2>&1 & ;;
-  *) zenity --warning --title="NexOS Control Center" --text="Unknown or unavailable tool: $name" || true ;;
+  "NexOS Security Center") xfce4-terminal --command=nexos-security-center >/dev/null 2>&1 & ;;
+  *) zenity --warning --title="NexOS Control Center" --text="Unknown or unavailable tool: $choice" || true ;;
 esac
 CONTROL
 chmod 0755 /usr/local/bin/nexos-control-center
+
+# Thunar custom action: right-click archive -> Extract with NexOS.
+cat > "/home/$LIVE_USERNAME/.config/Thunar/uca.xml" <<'UCA'
+<?xml version="1.0" encoding="UTF-8"?>
+<actions>
+<action>
+  <icon>package-x-generic</icon>
+  <name>Extract with NexOS</name>
+  <submenu></submenu>
+  <unique-id>1700000001-1</unique-id>
+  <command>nexos-extractor %f</command>
+  <description>Extract selected archive with NexOS Extractor</description>
+  <patterns>*.zip;*.7z;*.tar;*.tar.gz;*.tgz;*.tar.bz2;*.tbz2;*.tar.xz;*.txz;*.rar;*.gz;*.bz2;*.xz</patterns>
+  <directories/>
+  <audio-files/>
+  <image-files/>
+  <other-files/>
+  <text-files/>
+  <video-files/>
+</action>
+</actions>
+UCA
 
 # Desktop/menu launchers.
 cat > /usr/share/applications/nexos-control-center.desktop <<'DESKTOP'
@@ -222,6 +287,17 @@ Terminal=false
 Categories=Utility;Archiving;
 DESKTOP
 
+cat > /usr/share/applications/nexos-repair-tools.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=NexOS Repair Tools
+Comment=Fix common NexOS desktop/session issues
+Exec=nexos-repair-tools
+Icon=applications-system
+Terminal=false
+Categories=System;Utility;
+DESKTOP
+
 cat > /usr/share/applications/nexos-app-map.desktop <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -233,10 +309,11 @@ Terminal=false
 Categories=Documentation;System;
 DESKTOP
 
-for desktop in "NexOS Control Center" "NexOS Extractor" "NexOS App Map"; do
+for desktop in "NexOS Control Center" "NexOS Extractor" "NexOS Repair Tools" "NexOS App Map"; do
   case "$desktop" in
     "NexOS Control Center") src=/usr/share/applications/nexos-control-center.desktop ;;
     "NexOS Extractor") src=/usr/share/applications/nexos-extractor.desktop ;;
+    "NexOS Repair Tools") src=/usr/share/applications/nexos-repair-tools.desktop ;;
     "NexOS App Map") src=/usr/share/applications/nexos-app-map.desktop ;;
   esac
   if [[ -d "/home/$LIVE_USERNAME/Desktop" ]]; then
