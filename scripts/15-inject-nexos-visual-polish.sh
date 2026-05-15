@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Injects NexOS visual polish and VM display fixes.
 # Goal: stop the ISO from looking tiny/cluttered in VirtualBox and make the desktop cleaner.
-# This script also chains the boot-branding and icon-fix injectors so the main ISO builder stays focused.
+# This script also chains boot-branding, icon-fix, and final desktop layout injectors.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -128,61 +128,6 @@ cat > "$home_dir/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml" <<X
 </channel>
 XML
 
-mkdir -p "$home_dir/.config/xfce4/panel/launcher-20" "$home_dir/.config/xfce4/panel/launcher-21" "$home_dir/.config/xfce4/panel/launcher-22"
-cat > "$home_dir/.config/xfce4/panel/launcher-20/nexos-control-center.desktop" <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=Control Center
-Exec=nexos-control-center
-Icon=nexos-control-center
-Terminal=false
-DESKTOP
-cat > "$home_dir/.config/xfce4/panel/launcher-21/nexos-dev-center.desktop" <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=Dev Center
-Exec=nexos-dev-center
-Icon=nexos-dev-center
-Terminal=false
-DESKTOP
-cat > "$home_dir/.config/xfce4/panel/launcher-22/nexos-install-center.desktop" <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=Install Center
-Exec=nexos-install-center
-Icon=nexos-install-center
-Terminal=false
-DESKTOP
-
-cat > "$home_dir/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml" <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<channel name="xfce4-panel" version="1.0">
-  <property name="configver" type="int" value="2"/>
-  <property name="panels" type="array">
-    <value type="int" value="1"/>
-    <property name="panel-1" type="empty">
-      <property name="position" type="string" value="p=10;x=0;y=0"/>
-      <property name="length" type="uint" value="100"/>
-      <property name="position-locked" type="bool" value="true"/>
-      <property name="size" type="uint" value="50"/>
-      <property name="plugin-ids" type="array">
-        <value type="int" value="1"/><value type="int" value="20"/><value type="int" value="21"/><value type="int" value="22"/><value type="int" value="4"/><value type="int" value="5"/><value type="int" value="6"/><value type="int" value="7"/>
-      </property>
-    </property>
-  </property>
-  <property name="plugins" type="empty">
-    <property name="plugin-1" type="string" value="whiskermenu"/>
-    <property name="plugin-20" type="string" value="launcher"><property name="items" type="array"><value type="string" value="nexos-control-center.desktop"/></property></property>
-    <property name="plugin-21" type="string" value="launcher"><property name="items" type="array"><value type="string" value="nexos-dev-center.desktop"/></property></property>
-    <property name="plugin-22" type="string" value="launcher"><property name="items" type="array"><value type="string" value="nexos-install-center.desktop"/></property></property>
-    <property name="plugin-4" type="string" value="tasklist"/>
-    <property name="plugin-5" type="string" value="separator"><property name="expand" type="bool" value="true"/><property name="style" type="uint" value="0"/></property>
-    <property name="plugin-6" type="string" value="systray"/>
-    <property name="plugin-7" type="string" value="clock"/>
-  </property>
-</channel>
-XML
-
 cat > "$home_dir/.config/autostart/nexos-visual-setup.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -217,5 +162,6 @@ chmod 0755 "$LB_CONFIG_DIR/hooks/normal/090-nexos-visual-polish.hook.chroot"
 # Chain late-stage polish injectors.
 bash "$SCRIPT_DIR/16-inject-nexos-branding-boot.sh"
 bash "$SCRIPT_DIR/17-inject-nexos-icons-fix.sh"
+bash "$SCRIPT_DIR/18-inject-nexos-desktop-layout.sh"
 
-success "Injected NexOS visual polish, branding, and icon fixes for $NEXOS_EDITION."
+success "Injected NexOS visual polish, branding, icons, and cleaner desktop layout for $NEXOS_EDITION."
