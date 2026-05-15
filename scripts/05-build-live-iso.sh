@@ -94,8 +94,6 @@ shellcheck
 python3
 python3-venv
 python3-pip
-calamares
-calamares-settings-debian
 gparted
 parted
 dosfstools
@@ -105,12 +103,8 @@ feh
 imagemagick
 x11-xserver-utils
 xfconf
-virtualbox-guest-x11
-virtualbox-guest-utils
 qemu-guest-agent
 spice-vdagent
-xserver-xorg-video-vmware
-xserver-xorg-video-qxl
 PKGS
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
@@ -175,6 +169,8 @@ bash "$BUILD_SCRIPT_DIR/13-inject-nexos-dev-center.sh"
 bash "$BUILD_SCRIPT_DIR/14-inject-nexos-install-center.sh"
 # Visual polish: VM resolution fixes, cleaner desktop, wallpaper, readable panel.
 bash "$BUILD_SCRIPT_DIR/15-inject-nexos-visual-polish.sh"
+# Final package safety pass. Must run after all injectors and before lb build.
+bash "$BUILD_SCRIPT_DIR/19-fix-nexos-package-lists.sh"
 
 cat > "$LB_CONFIG_DIR/hooks/normal/040-nexos-edition-session.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
