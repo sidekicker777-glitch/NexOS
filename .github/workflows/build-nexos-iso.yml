@@ -38,13 +38,17 @@ jobs:
 
       - name: Build ISO inside Debian Trixie container
         run: |
+          mkdir -p build/logs iso
+
           docker run --privileged --rm \
             -v "$PWD:/work" \
             -w /work \
             -e DEBIAN_FRONTEND=noninteractive \
             debian:trixie \
             bash -lc '
-              set -Eeuo pipefail
+              set -Eeuxo pipefail
+
+              mkdir -p build/logs iso
 
               apt-get update
 
@@ -52,15 +56,15 @@ jobs:
                 bash ca-certificates coreutils curl file findutils git grep gzip \
                 live-build debootstrap squashfs-tools xorriso isolinux \
                 syslinux-common syslinux-utils dosfstools mtools parted rsync \
-                make sed tar util-linux
+                make sed tar util-linux sudo
 
               # GitHub web uploads can remove Linux executable permissions.
               find scripts testing -type f -name "*.sh" -exec chmod +x {} +
 
-              make init
-              make part3-verify
-              make iso
-              make validate-iso
+              # Build the ISO directly. The ISO script regenerates live-build config itself,
+              # so we do not run unrelated VirtualBox verification in this cloud build.
+              make iso 2>&1 | tee build/logs/github-actions-make-iso.log
+              make validate-iso 2>&1 | tee build/logs/github-actions-validate-iso.log
 
               ls -lh iso
             '
@@ -70,11 +74,13 @@ jobs:
         run: df -h
 
       - name: Upload NexOS ISO artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: NexOS-live-ISO
           path: |
             iso/*.iso
             iso/*.sha256
-          if-no-files-found: error
+            build/logs/**
+          if-no-files-found: warn
           retention-days: 14
