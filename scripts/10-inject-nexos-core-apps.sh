@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Injects NexOS-owned core wrapper apps into live-build config.
-# Main and Security get these first. Tools also receives them when built.
+# Main and Security are the focus. Tools also receives these when built.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,7 +47,7 @@ for pkg in xarchiver 7zip unzip zip libarchive-tools thunar-archive-plugin xdg-u
 done
 
 mkdir -p /usr/share/nexos /usr/local/bin /usr/share/applications
-mkdir -p "/home/$LIVE_USERNAME/Desktop" "/home/$LIVE_USERNAME/.config/autostart" "/home/$LIVE_USERNAME/.config/Thunar" || true
+mkdir -p "/home/$LIVE_USERNAME/Desktop" "/home/$LIVE_USERNAME/.config/autostart" "/home/$LIVE_USERNAME/.config/Thunar" "/home/$LIVE_USERNAME/.config/nexos" || true
 
 cat > /usr/share/nexos/app-map.txt <<'APPMAP'
 NexOS App Map
@@ -58,10 +58,13 @@ Open-source apps are configured, wrapped, and organized by NexOS instead of bein
 
 Core NexOS wrappers:
 - NexOS Welcome: original NexOS welcome flow.
+- NexOS First Setup: first-boot setup checklist.
 - NexOS Control Center: launcher for system settings and NexOS tools.
 - NexOS Code Editor: wrapper around installed open-source editors.
 - NexOS Extractor: simple archive extraction wrapper around open-source archive tools.
 - NexOS Repair Tools: quick desktop repair and troubleshooting actions.
+- NexOS Update Helper: live-system update/help screen.
+- NexOS Browser: browser launcher around Firefox ESR when installed.
 - NexOS System Report: wrapper around system information tools.
 
 Open-source foundations currently integrated:
@@ -97,26 +100,36 @@ fi
 APPMAPCMD
 chmod 0755 /usr/local/bin/nexos-app-map
 
+cat > /usr/local/bin/nexos-browser <<'BROWSER'
+#!/usr/bin/env bash
+set -euo pipefail
+url="${1:-}"
+if command -v firefox-esr >/dev/null 2>&1; then
+  firefox-esr ${url:+"$url"} >/dev/null 2>&1 &
+elif command -v firefox >/dev/null 2>&1; then
+  firefox ${url:+"$url"} >/dev/null 2>&1 &
+else
+  zenity --warning --title="NexOS Browser" --text="No browser is installed yet." || true
+fi
+BROWSER
+chmod 0755 /usr/local/bin/nexos-browser
+
+cat > /usr/local/bin/nexos-update-helper <<'UPDATEHELPER'
+#!/usr/bin/env bash
+set -euo pipefail
+xfce4-terminal --title="NexOS Update Helper" --command="bash -lc 'echo NexOS Update Helper; echo ====================; echo; echo This live ISO can check package updates, but changes are temporary until NexOS has an installed mode.; echo; sudo apt update; echo; apt list --upgradable 2>/dev/null || true; echo; read -p \"Press Enter to close...\"'" >/dev/null 2>&1 &
+UPDATEHELPER
+chmod 0755 /usr/local/bin/nexos-update-helper
+
 cat > /usr/local/bin/nexos-extractor <<'EXTRACTOR'
 #!/usr/bin/env bash
 set -euo pipefail
-
-pick_file() {
-  zenity --file-selection --title="NexOS Extractor - Choose archive" \
-    --file-filter="Archives | *.zip *.7z *.tar *.tar.gz *.tgz *.tar.bz2 *.tbz2 *.tar.xz *.txz *.rar *.gz *.bz2 *.xz" || true
-}
-
-pick_folder() {
-  zenity --file-selection --directory --title="NexOS Extractor - Choose output folder" || true
-}
-
 archive="${1:-}"
 if [[ -z "$archive" ]]; then
-  archive="$(pick_file)"
+  archive="$(zenity --file-selection --title="NexOS Extractor - Choose archive" --file-filter="Archives | *.zip *.7z *.tar *.tar.gz *.tgz *.tar.bz2 *.tbz2 *.tar.xz *.txz *.rar *.gz *.bz2 *.xz" || true)"
 fi
 [[ -n "$archive" ]] || exit 0
 [[ -f "$archive" ]] || { zenity --error --title="NexOS Extractor" --text="Archive not found:\n$archive" || true; exit 1; }
-
 base_name="$(basename "$archive")"
 default_out="$HOME/Extracted/${base_name%.*}"
 outdir="${2:-}"
@@ -126,28 +139,18 @@ if [[ -z "$outdir" ]]; then
 fi
 [[ -n "$outdir" ]] || exit 0
 mkdir -p "$outdir"
-
 logfile="/tmp/nexos-extractor-$(date +%s).log"
 {
   echo "NexOS Extractor"
   echo "Archive: $archive"
   echo "Output:  $outdir"
   echo
-
   lower="${archive,,}"
   case "$lower" in
-    *.zip)
-      if command -v unzip >/dev/null 2>&1; then unzip -o "$archive" -d "$outdir"; else bsdtar -xf "$archive" -C "$outdir"; fi
-      ;;
-    *.7z)
-      if command -v 7z >/dev/null 2>&1; then 7z x -y "-o$outdir" "$archive"; elif command -v 7za >/dev/null 2>&1; then 7za x -y "-o$outdir" "$archive"; else bsdtar -xf "$archive" -C "$outdir"; fi
-      ;;
-    *.tar|*.tar.gz|*.tgz|*.tar.bz2|*.tbz2|*.tar.xz|*.txz)
-      tar -xf "$archive" -C "$outdir"
-      ;;
-    *)
-      if command -v bsdtar >/dev/null 2>&1; then bsdtar -xf "$archive" -C "$outdir"; elif command -v 7z >/dev/null 2>&1; then 7z x -y "-o$outdir" "$archive"; else echo "No supported extractor found."; exit 2; fi
-      ;;
+    *.zip) if command -v unzip >/dev/null 2>&1; then unzip -o "$archive" -d "$outdir"; else bsdtar -xf "$archive" -C "$outdir"; fi ;;
+    *.7z) if command -v 7z >/dev/null 2>&1; then 7z x -y "-o$outdir" "$archive"; elif command -v 7za >/dev/null 2>&1; then 7za x -y "-o$outdir" "$archive"; else bsdtar -xf "$archive" -C "$outdir"; fi ;;
+    *.tar|*.tar.gz|*.tgz|*.tar.bz2|*.tbz2|*.tar.xz|*.txz) tar -xf "$archive" -C "$outdir" ;;
+    *) if command -v bsdtar >/dev/null 2>&1; then bsdtar -xf "$archive" -C "$outdir"; elif command -v 7z >/dev/null 2>&1; then 7z x -y "-o$outdir" "$archive"; else echo "No supported extractor found."; exit 2; fi ;;
   esac
 } >"$logfile" 2>&1 && {
   zenity --question --title="NexOS Extractor" --text="Extraction complete.\n\nOutput folder:\n$outdir\n\nOpen the folder now?" && xdg-open "$outdir" >/dev/null 2>&1 &
@@ -186,7 +189,6 @@ chmod 0755 /usr/local/bin/nexos-repair-tools
 cat > /usr/local/bin/nexos-control-center <<'CONTROL'
 #!/usr/bin/env bash
 set -euo pipefail
-
 entries=(
   "System|Settings Manager|xfce4-settings-manager|Open XFCE settings"
   "System|Display Settings|xfce4-display-settings|Change resolution and monitors"
@@ -197,29 +199,28 @@ entries=(
   "Printers|Printer Settings|system-config-printer|Configure printers"
   "Disks|Disk Utility|gnome-disks|Manage disks when available"
   "Disks|GParted|gparted|Partition editor when available"
+  "NexOS|NexOS First Setup|nexos-first-setup|Run first setup again"
+  "NexOS|NexOS Browser|nexos-browser|Open the web browser"
   "NexOS|NexOS Code Editor|nexos-code-editor|Open NexOS editor launcher"
   "NexOS|NexOS Extractor|nexos-extractor|Extract archives"
   "NexOS|NexOS Repair Tools|nexos-repair-tools|Fix common desktop/session issues"
+  "NexOS|NexOS Update Helper|nexos-update-helper|Check package updates"
   "NexOS|NexOS Toolbox|nexos-toolbox|Open optional tool launcher"
   "NexOS|NexOS App Map|nexos-app-map|View open-source foundations"
   "NexOS|NexOS System Report|nexos-system-report|View system report"
   "Security|NexOS Security Center|nexos-security-center|Open security tools when installed"
 )
-
 menu_items=()
 for row in "${entries[@]}"; do
   IFS='|' read -r category name cmd desc <<< "$row"
   command -v "$cmd" >/dev/null 2>&1 && menu_items+=("$category" "$name" "$desc")
 done
-
 if (( ${#menu_items[@]} == 0 )); then
   zenity --warning --title="NexOS Control Center" --text="No control center tools are available." || true
   exit 1
 fi
-
-choice="$(zenity --list --title="NexOS Control Center" --width=780 --height=540 --print-column=2 --column="Category" --column="Tool" --column="Description" "${menu_items[@]}" || true)"
+choice="$(zenity --list --title="NexOS Control Center" --width=800 --height=560 --print-column=2 --column="Category" --column="Tool" --column="Description" "${menu_items[@]}" || true)"
 [[ -n "$choice" ]] || exit 0
-
 case "$choice" in
   "Settings Manager") xfce4-settings-manager >/dev/null 2>&1 & ;;
   "Display Settings") xfce4-display-settings >/dev/null 2>&1 & ;;
@@ -230,9 +231,12 @@ case "$choice" in
   "Printer Settings") system-config-printer >/dev/null 2>&1 & ;;
   "Disk Utility") gnome-disks >/dev/null 2>&1 & ;;
   GParted) gparted >/dev/null 2>&1 & ;;
+  "NexOS First Setup") nexos-first-setup --force >/dev/null 2>&1 & ;;
+  "NexOS Browser") nexos-browser >/dev/null 2>&1 & ;;
   "NexOS Code Editor") nexos-code-editor >/dev/null 2>&1 & ;;
   "NexOS Extractor") nexos-extractor >/dev/null 2>&1 & ;;
   "NexOS Repair Tools") nexos-repair-tools >/dev/null 2>&1 & ;;
+  "NexOS Update Helper") nexos-update-helper >/dev/null 2>&1 & ;;
   "NexOS Toolbox") nexos-toolbox >/dev/null 2>&1 & ;;
   "NexOS App Map") nexos-app-map >/dev/null 2>&1 & ;;
   "NexOS System Report") xfce4-terminal --command=nexos-system-report >/dev/null 2>&1 & ;;
@@ -241,6 +245,35 @@ case "$choice" in
 esac
 CONTROL
 chmod 0755 /usr/local/bin/nexos-control-center
+
+cat > /usr/local/bin/nexos-first-setup <<'FIRSTSETUP'
+#!/usr/bin/env bash
+set -euo pipefail
+done_file="$HOME/.config/nexos/first-setup.done"
+mkdir -p "$(dirname "$done_file")"
+if [[ "${1:-}" != "--force" && -f "$done_file" ]]; then
+  exit 0
+fi
+while true; do
+  choice="$(zenity --list --title="NexOS First Setup" --width=760 --height=500 --print-column=1 --column="Step" --column="What it does" \
+    "Open Control Center" "Main settings and NexOS tools" \
+    "Set Display" "Resolution and monitor settings" \
+    "Set Network" "Wi-Fi/Ethernet connections" \
+    "Open Code Editor" "Choose a code editor" \
+    "View App Map" "See open-source foundations" \
+    "Finish Setup" "Do not show this on next login" || true)"
+  [[ -n "$choice" ]] || exit 0
+  case "$choice" in
+    "Open Control Center") nexos-control-center >/dev/null 2>&1 & ;;
+    "Set Display") xfce4-display-settings >/dev/null 2>&1 & ;;
+    "Set Network") nm-connection-editor >/dev/null 2>&1 & ;;
+    "Open Code Editor") nexos-code-editor >/dev/null 2>&1 & ;;
+    "View App Map") nexos-app-map >/dev/null 2>&1 & ;;
+    "Finish Setup") date > "$done_file"; zenity --info --title="NexOS First Setup" --text="Setup complete. You can reopen this from NexOS Control Center." || true; exit 0 ;;
+  esac
+done
+FIRSTSETUP
+chmod 0755 /usr/local/bin/nexos-first-setup
 
 # Thunar custom action: right-click archive -> Extract with NexOS.
 cat > "/home/$LIVE_USERNAME/.config/Thunar/uca.xml" <<'UCA'
@@ -265,61 +298,50 @@ cat > "/home/$LIVE_USERNAME/.config/Thunar/uca.xml" <<'UCA'
 UCA
 
 # Desktop/menu launchers.
-cat > /usr/share/applications/nexos-control-center.desktop <<'DESKTOP'
+make_desktop() {
+  local path="$1" name="$2" comment="$3" exec_cmd="$4" icon="$5" cats="$6"
+  cat > "$path" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=NexOS Control Center
-Comment=Open NexOS settings and tools
-Exec=nexos-control-center
-Icon=preferences-system
+Name=$name
+Comment=$comment
+Exec=$exec_cmd
+Icon=$icon
 Terminal=false
-Categories=Settings;System;
+Categories=$cats
 DESKTOP
+}
 
-cat > /usr/share/applications/nexos-extractor.desktop <<'DESKTOP'
+make_desktop /usr/share/applications/nexos-control-center.desktop "NexOS Control Center" "Open NexOS settings and tools" "nexos-control-center" "preferences-system" "Settings;System;"
+make_desktop /usr/share/applications/nexos-first-setup.desktop "NexOS First Setup" "Run the NexOS first setup checklist" "nexos-first-setup --force" "preferences-system" "Settings;System;"
+make_desktop /usr/share/applications/nexos-browser.desktop "NexOS Browser" "Open the NexOS browser" "nexos-browser" "web-browser" "Network;WebBrowser;"
+make_desktop /usr/share/applications/nexos-extractor.desktop "NexOS Extractor" "Extract archives with NexOS" "nexos-extractor" "package-x-generic" "Utility;Archiving;"
+make_desktop /usr/share/applications/nexos-repair-tools.desktop "NexOS Repair Tools" "Fix common NexOS desktop/session issues" "nexos-repair-tools" "applications-system" "System;Utility;"
+make_desktop /usr/share/applications/nexos-update-helper.desktop "NexOS Update Helper" "Check live system package updates" "nexos-update-helper" "system-software-update" "System;"
+make_desktop /usr/share/applications/nexos-app-map.desktop "NexOS App Map" "Show NexOS open-source foundations" "nexos-app-map" "text-x-generic" "Documentation;System;"
+
+cat > "/home/$LIVE_USERNAME/.config/autostart/nexos-first-setup.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=NexOS Extractor
-Comment=Extract archives with NexOS
-Exec=nexos-extractor
-Icon=package-x-generic
+Name=NexOS First Setup
+Exec=nexos-first-setup
 Terminal=false
-Categories=Utility;Archiving;
+X-GNOME-Autostart-enabled=true
 DESKTOP
 
-cat > /usr/share/applications/nexos-repair-tools.desktop <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=NexOS Repair Tools
-Comment=Fix common NexOS desktop/session issues
-Exec=nexos-repair-tools
-Icon=applications-system
-Terminal=false
-Categories=System;Utility;
-DESKTOP
-
-cat > /usr/share/applications/nexos-app-map.desktop <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=NexOS App Map
-Comment=Show NexOS open-source foundations
-Exec=nexos-app-map
-Icon=text-x-generic
-Terminal=false
-Categories=Documentation;System;
-DESKTOP
-
-for desktop in "NexOS Control Center" "NexOS Extractor" "NexOS Repair Tools" "NexOS App Map"; do
+for desktop in "NexOS Control Center" "NexOS First Setup" "NexOS Browser" "NexOS Extractor" "NexOS Repair Tools" "NexOS App Map"; do
+  src="/usr/share/applications/$(echo "$desktop" | tr '[:upper:] ' '[:lower:]-').desktop"
+  # Manual mapping keeps names stable even with spaces.
   case "$desktop" in
     "NexOS Control Center") src=/usr/share/applications/nexos-control-center.desktop ;;
+    "NexOS First Setup") src=/usr/share/applications/nexos-first-setup.desktop ;;
+    "NexOS Browser") src=/usr/share/applications/nexos-browser.desktop ;;
     "NexOS Extractor") src=/usr/share/applications/nexos-extractor.desktop ;;
     "NexOS Repair Tools") src=/usr/share/applications/nexos-repair-tools.desktop ;;
     "NexOS App Map") src=/usr/share/applications/nexos-app-map.desktop ;;
   esac
-  if [[ -d "/home/$LIVE_USERNAME/Desktop" ]]; then
-    cp -f "$src" "/home/$LIVE_USERNAME/Desktop/$desktop.desktop" || true
-    chmod 0755 "/home/$LIVE_USERNAME/Desktop/$desktop.desktop" || true
-  fi
+  cp -f "$src" "/home/$LIVE_USERNAME/Desktop/$desktop.desktop" || true
+  chmod 0755 "/home/$LIVE_USERNAME/Desktop/$desktop.desktop" || true
 done
 
 chown -R "$LIVE_USERNAME:$LIVE_USERNAME" "/home/$LIVE_USERNAME" 2>/dev/null || true
