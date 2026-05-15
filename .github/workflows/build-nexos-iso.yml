@@ -1,0 +1,72 @@
+name: Build NexOS ISO
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'Makefile'
+      - 'build-config/**'
+      - 'live-build/**'
+      - 'scripts/**'
+      - '.github/workflows/build-nexos-iso.yml'
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-iso:
+    name: Build bootable live ISO
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout NexOS source
+        uses: actions/checkout@v4
+
+      - name: Show runner disk space before build
+        run: |
+          df -h
+          docker --version
+
+      - name: Build ISO inside Debian Trixie container
+        run: |
+          docker run --privileged --rm \
+            -v "$PWD:/work" \
+            -w /work \
+            -e DEBIAN_FRONTEND=noninteractive \
+            debian:trixie \
+            bash -lc '
+              set -Eeuo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends \
+                bash ca-certificates coreutils curl file findutils git grep gzip \
+                live-build debootstrap squashfs-tools xorriso isolinux \
+                syslinux-common syslinux-utils dosfstools mtools parted rsync \
+                make sed tar util-linux
+              make init
+              make part3-verify
+              make iso
+              make validate-iso
+              ls -lh iso
+            '
+
+      - name: Show runner disk space after build
+        if: always()
+        run: df -h
+
+      - name: Upload NexOS ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexOS-live-ISO
+          path: |
+            iso/*.iso
+            iso/*.sha256
+          if-no-files-found: error
+          retention-days: 14
