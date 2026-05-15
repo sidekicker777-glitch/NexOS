@@ -60,11 +60,9 @@ cat > "$LB_CONFIG_DIR/package-lists/40-nexos-common-tools.list.chroot" <<'PKGS'
 zenity
 catfish
 geany
+mousepad
 meld
 vlc
-libreoffice-writer
-libreoffice-calc
-libreoffice-impress
 cups
 system-config-printer
 fonts-noto-core
@@ -111,21 +109,20 @@ install_if_available() {
 apt-get update || true
 
 # Always try to improve the base desktop, but never let optional packages break the ISO.
-for pkg in xfce4-whiskermenu-plugin xfce4-power-manager xfce4-goodies rofi baobab fastfetch neofetch pciutils usbutils lshw inxi geany-plugins gparted simple-scan; do
+for pkg in xfce4-whiskermenu-plugin xfce4-power-manager xfce4-goodies rofi baobab fastfetch neofetch pciutils usbutils lshw inxi geany-plugins gparted simple-scan micro neovim; do
   install_if_available "$pkg"
 done
 
-# Broad NexOS open-source tool pack. This is not just creator apps: it covers creative,
-# development, system, productivity, network, education, and utility categories.
+# Broad NexOS open-source tool pack. This excludes the removed productivity and education/math groups.
 if [[ "$NEXOS_EDITION" == "tools" || "$NEXOS_EDITION" == "creator" ]]; then
   for pkg in \
     blender gimp inkscape krita audacity kdenlive obs-studio ffmpeg lmms ardour handbrake \
     freecad openscad sweethome3d darktable rawtherapee scribus fontforge \
     kate codeblocks qtcreator python3-pip python3-tk nodejs npm rustc cargo openjdk-21-jdk \
     gitg sqlitebrowser dbeaver dbeaver-ce \
-    gnome-disk-utility filezilla remmina thunderbird keepassxc flameshot \
+    gnome-disk-utility filezilla remmina flameshot \
     virtualbox-guest-x11 qemu-guest-agent spice-vdagent \
-    godot3 love stellarium octave maxima gnuplot qalculate-gtk; do
+    godot3 love; do
     install_if_available "$pkg"
   done
 fi
@@ -174,10 +171,54 @@ set -euo pipefail
 REPORT
 chmod 0755 /usr/local/bin/nexos-system-report
 
+cat > /usr/local/bin/nexos-code-editor <<'CODEEDITOR'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# NexOS Code Editor is a wrapper that launches the best installed open-source editor.
+# It keeps the OS experience branded as NexOS while using open-source foundations.
+editors=(
+  "Geany|geany|Lightweight code editor"
+  "Kate|kate|Advanced text/code editor"
+  "Mousepad|mousepad|Simple text editor"
+  "Micro Terminal Editor|micro|Modern terminal editor"
+  "Neovim|nvim|Terminal code editor"
+)
+
+menu_items=()
+for row in "${editors[@]}"; do
+  IFS='|' read -r name cmd desc <<< "$row"
+  command -v "$cmd" >/dev/null 2>&1 && menu_items+=("$name" "$desc")
+done
+
+if (( ${#menu_items[@]} == 0 )); then
+  zenity --warning --title="NexOS Code Editor" --text="No supported editor is installed yet." || true
+  exit 1
+fi
+
+choice="$(zenity --list --title="NexOS Code Editor" --width=640 --height=360 --column="Editor" --column="Description" "${menu_items[@]}" || true)"
+[[ -n "$choice" ]] || exit 0
+
+case "$choice" in
+  Geany) geany >/dev/null 2>&1 & ;;
+  Kate) kate >/dev/null 2>&1 & ;;
+  Mousepad) mousepad >/dev/null 2>&1 & ;;
+  "Micro Terminal Editor") xfce4-terminal --command=micro >/dev/null 2>&1 & ;;
+  Neovim) xfce4-terminal --command=nvim >/dev/null 2>&1 & ;;
+esac
+CODEEDITOR
+chmod 0755 /usr/local/bin/nexos-code-editor
+
 cat > /usr/local/bin/nexos-toolbox <<'TOOLBOX'
 #!/usr/bin/env bash
 set -euo pipefail
 apps=(
+  "Development|NexOS Code Editor|nexos-code-editor|NexOS editor launcher"
+  "Development|Geany|geany|Lightweight code editor"
+  "Development|Kate|kate|Advanced text editor"
+  "Development|Code::Blocks|codeblocks|C/C++ IDE"
+  "Development|Qt Creator|qtcreator|Qt/C++ IDE"
+  "Development|SQLite Browser|sqlitebrowser|SQLite database editor"
   "3D / Blender|Blender|blender|3D modeling, animation, rendering"
   "3D / CAD|FreeCAD|freecad|CAD modeling"
   "3D / CAD|OpenSCAD|openscad|Script-based CAD modeling"
@@ -188,20 +229,12 @@ apps=(
   "Media|Kdenlive|kdenlive|Video editing"
   "Media|OBS Studio|obs|Recording and streaming"
   "Media|VLC|vlc|Media playback"
-  "Development|Geany|geany|Lightweight code editor"
-  "Development|Kate|kate|Advanced text editor"
-  "Development|Code::Blocks|codeblocks|C/C++ IDE"
-  "Development|Qt Creator|qtcreator|Qt/C++ IDE"
-  "Development|SQLite Browser|sqlitebrowser|SQLite database editor"
+  "Game Dev|Godot|godot3|Game engine/editor"
+  "Game Dev|LÖVE|love|2D game framework"
   "Files / Network|FileZilla|filezilla|FTP/SFTP file transfer"
   "Files / Network|Remmina|remmina|Remote desktop client"
-  "Productivity|LibreOffice Writer|libreoffice|Documents"
-  "Productivity|Thunderbird|thunderbird|Email client"
-  "Security / Passwords|KeePassXC|keepassxc|Password manager"
   "System|GParted|gparted|Disk partition editor"
   "System|Disk Utility|gnome-disks|Disk utility"
-  "Education|Stellarium|stellarium|Planetarium"
-  "Education|Octave|octave|Math/science computing"
 )
 menu_items=()
 for row in "${apps[@]}"; do
@@ -214,10 +247,10 @@ if (( ${#menu_items[@]} == 0 )); then
 fi
 choice="$(zenity --list --title="NexOS Toolbox" --width=780 --height=520 --column="Category" --column="App" --column="Purpose" "${menu_items[@]}" || true)"
 [[ -n "$choice" ]] || exit 0
-# zenity returns first column by default, so use a launcher selection helper if duplicate category is chosen.
 app="$(zenity --entry --title="Open Tool" --text="Type the app name exactly as shown, or cancel.\nSelected category: $choice" || true)"
 [[ -n "$app" ]] || exit 0
 case "$app" in
+  "NexOS Code Editor") nexos-code-editor >/dev/null 2>&1 & ;;
   Blender) blender >/dev/null 2>&1 & ;;
   FreeCAD) freecad >/dev/null 2>&1 & ;;
   OpenSCAD) openscad >/dev/null 2>&1 & ;;
@@ -233,20 +266,16 @@ case "$app" in
   "Code::Blocks") codeblocks >/dev/null 2>&1 & ;;
   "Qt Creator") qtcreator >/dev/null 2>&1 & ;;
   "SQLite Browser") sqlitebrowser >/dev/null 2>&1 & ;;
+  Godot) godot3 >/dev/null 2>&1 & ;;
+  LÖVE) love >/dev/null 2>&1 & ;;
   FileZilla) filezilla >/dev/null 2>&1 & ;;
   Remmina) remmina >/dev/null 2>&1 & ;;
-  "LibreOffice Writer") libreoffice --writer >/dev/null 2>&1 & ;;
-  Thunderbird) thunderbird >/dev/null 2>&1 & ;;
-  KeePassXC) keepassxc >/dev/null 2>&1 & ;;
   GParted) gparted >/dev/null 2>&1 & ;;
   "Disk Utility") gnome-disks >/dev/null 2>&1 & ;;
-  Stellarium) stellarium >/dev/null 2>&1 & ;;
-  Octave) octave --gui >/dev/null 2>&1 & ;;
   *) zenity --warning --title="NexOS Toolbox" --text="Unknown or unavailable app: $app" || true ;;
 esac
 TOOLBOX
 chmod 0755 /usr/local/bin/nexos-toolbox
-# Backward-compatible alias from earlier creator build.
 ln -sf /usr/local/bin/nexos-toolbox /usr/local/bin/nexos-studio
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
@@ -267,12 +296,12 @@ cat > /usr/local/bin/nexos-welcome <<'WELCOME'
 set -euo pipefail
 EDITION="__EDITION_LABEL__"
 case "__NEXOS_EDITION__" in
-  tools) EXTRA="Tools edition integrates many open-source apps into NexOS Toolbox. Try: nexos-toolbox" ;;
+  tools) EXTRA="Tools edition integrates open-source apps into NexOS Toolbox. Productivity and education/math packs were removed. Try: nexos-toolbox" ;;
   creator) EXTRA="Creator build is available, but the broader direction is NexOS Tools. Try: nexos-toolbox" ;;
   security) EXTRA="Security edition tools are included. Try: nexos-security-center" ;;
   *) EXTRA="This is the clean main NexOS edition. Extra tool packs are separate builds." ;;
 esac
-zenity --info --title="Welcome to NexOS" --width=680 --height=410 --text="<b>Welcome to $EDITION</b>\n\nThis is your own NexOS operating system. Open-source apps are configured, launched, and organized as NexOS tools.\n\nLogin: nexos / nexos\n\n$EXTRA\n\nTry:\n  nexos-info\n  nexos-system-report\n  nexos-toolbox" || true
+zenity --info --title="Welcome to NexOS" --width=680 --height=410 --text="<b>Welcome to $EDITION</b>\n\nThis is your own NexOS operating system. Open-source apps are configured, launched, and organized as NexOS tools.\n\nLogin: nexos / nexos\n\n$EXTRA\n\nTry:\n  nexos-info\n  nexos-code-editor\n  nexos-toolbox" || true
 WELCOME
 chmod 0755 /usr/local/bin/nexos-welcome
 
@@ -304,6 +333,17 @@ Categories=System;
 DESKTOP
 chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Welcome.desktop"
 
+cat > "/home/$LIVE_USERNAME/Desktop/NexOS Code Editor.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=NexOS Code Editor
+Exec=nexos-code-editor
+Icon=accessories-text-editor
+Terminal=false
+Categories=Development;
+DESKTOP
+chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Code Editor.desktop"
+
 cat > "/home/$LIVE_USERNAME/Desktop/NexOS Toolbox.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -326,16 +366,15 @@ Categories=System;FileManager;
 DESKTOP
 chmod 0755 "/home/$LIVE_USERNAME/Desktop/File Manager.desktop"
 
-cat > "/home/$LIVE_USERNAME/Desktop/Code Editor.desktop" <<'DESKTOP'
+cat > /usr/share/applications/nexos-code-editor.desktop <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=Code Editor
-Exec=geany
-Icon=geany
+Name=NexOS Code Editor
+Exec=nexos-code-editor
+Icon=accessories-text-editor
 Terminal=false
 Categories=Development;
 DESKTOP
-chmod 0755 "/home/$LIVE_USERNAME/Desktop/Code Editor.desktop"
 
 cat > /usr/share/applications/nexos-toolbox.desktop <<'DESKTOP'
 [Desktop Entry]
