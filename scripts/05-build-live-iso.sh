@@ -67,13 +67,14 @@ fonts-noto-color-emoji
 papirus-icon-theme
 arc-theme
 xarchiver
-p7zip-full
+7zip
 unzip
 zip
 libarchive-tools
 thunar-archive-plugin
 micro
 neovim
+xdg-utils
 PKGS
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
@@ -128,6 +129,8 @@ fi
 
 # Core NexOS-owned wrapper apps: Control Center, Extractor, App Map.
 bash "$BUILD_SCRIPT_DIR/10-inject-nexos-core-apps.sh"
+# Desktop polish: panel layout, quick help, run/power helpers, shortcuts.
+bash "$BUILD_SCRIPT_DIR/11-inject-nexos-desktop-polish.sh"
 
 cat > "$LB_CONFIG_DIR/hooks/normal/040-nexos-edition-session.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
@@ -327,16 +330,6 @@ DESKTOP
   cp -f /usr/share/applications/nexos-security-center.desktop "/home/$LIVE_USERNAME/Desktop/NexOS Security Center.desktop" || true
   chmod 0755 "/home/$LIVE_USERNAME/Desktop/NexOS Security Center.desktop" || true
 fi
-
-cat > "/home/$LIVE_USERNAME/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml" <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<channel name="xsettings" version="1.0">
-  <property name="Net" type="empty">
-    <property name="ThemeName" type="string" value="Arc-Dark"/>
-    <property name="IconThemeName" type="string" value="Papirus-Dark"/>
-  </property>
-</channel>
-XML
 
 chown -R "$LIVE_USERNAME:$LIVE_USERNAME" "/home/$LIVE_USERNAME"
 mkdir -p /etc/skel
