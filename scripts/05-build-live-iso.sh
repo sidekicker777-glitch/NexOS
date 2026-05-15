@@ -82,6 +82,18 @@ iproute2
 iputils-ping
 dnsutils
 traceroute
+git
+make
+cmake
+ninja-build
+gcc
+g++
+gdb
+pkg-config
+shellcheck
+python3
+python3-venv
+python3-pip
 PKGS
 
 if [[ "$NEXOS_EDITION" == "security" ]]; then
@@ -140,6 +152,8 @@ bash "$BUILD_SCRIPT_DIR/10-inject-nexos-core-apps.sh"
 bash "$BUILD_SCRIPT_DIR/11-inject-nexos-desktop-polish.sh"
 # Maintenance/admin helpers: backup, network, hardware, maintenance center.
 bash "$BUILD_SCRIPT_DIR/12-inject-nexos-maintenance-tools.sh"
+# Developer center: code editor workflow, compiler checks, and starter projects.
+bash "$BUILD_SCRIPT_DIR/13-inject-nexos-dev-center.sh"
 
 cat > "$LB_CONFIG_DIR/hooks/normal/040-nexos-edition-session.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
@@ -275,7 +289,7 @@ case "__NEXOS_EDITION__" in
   tools|creator) EXTRA="Tools edition includes optional app packs plus NexOS core apps." ;;
   *) EXTRA="Main edition is the clean daily-use NexOS build." ;;
 esac
-zenity --info --title="Welcome to NexOS" --width=680 --height=420 --text="<b>Welcome to __EDITION_LABEL__</b>\n\nNexOS is your own OS experience built on open-source foundations.\n\nLogin: nexos / nexos\n\n$EXTRA\n\nCore commands:\n  nexos-control-center\n  nexos-extractor\n  nexos-code-editor\n  nexos-system-report" || true
+zenity --info --title="Welcome to NexOS" --width=700 --height=440 --text="<b>Welcome to __EDITION_LABEL__</b>\n\nNexOS is your own OS experience built on open-source foundations.\n\nLogin: nexos / nexos\n\n$EXTRA\n\nCore commands:\n  nexos-control-center\n  nexos-dev-center\n  nexos-extractor\n  nexos-code-editor\n  nexos-system-report" || true
 WELCOME
 chmod 0755 /usr/local/bin/nexos-welcome
 
@@ -319,7 +333,8 @@ DESKTOP
 for pair in \
   "NexOS Welcome|/usr/share/applications/nexos-info.desktop" \
   "NexOS Code Editor|/usr/share/applications/nexos-code-editor.desktop" \
-  "NexOS System Report|/usr/share/applications/nexos-system-report.desktop"; do
+  "NexOS System Report|/usr/share/applications/nexos-system-report.desktop" \
+  "NexOS Dev Center|/usr/share/applications/nexos-dev-center.desktop"; do
   name="${pair%%|*}"
   src="${pair#*|}"
   [[ -f "$src" ]] && cp -f "$src" "/home/$LIVE_USERNAME/Desktop/$name.desktop" || true
