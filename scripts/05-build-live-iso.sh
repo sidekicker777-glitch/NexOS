@@ -15,7 +15,9 @@ ensure_dir "$ISO_DIR"
 ensure_dir "$LOG_DIR"
 
 log "Preparing fresh live-build configuration."
-"$SCRIPT_DIR/02-init-live-build.sh"
+# Use bash explicitly so Windows/GitHub web uploads cannot break this by
+# stripping Linux executable permissions from scripts.
+bash "$SCRIPT_DIR/02-init-live-build.sh"
 
 log "Starting live-build. This downloads Debian packages and may take a while."
 log "Target ISO: $ARTIFACT_ISO"
