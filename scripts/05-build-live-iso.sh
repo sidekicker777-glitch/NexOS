@@ -20,6 +20,51 @@ log "Preparing fresh live-build configuration."
 # because common.sh defines its own SCRIPT_DIR for the shared library folder.
 bash "$BUILD_SCRIPT_DIR/02-init-live-build.sh"
 
+log "Injecting forced live login setup: username=$LIVE_USERNAME password=$LIVE_USERNAME"
+cat > "$LB_CONFIG_DIR/hooks/normal/020-nexos-force-live-login.hook.chroot" <<HOOK
+#!/usr/bin/env bash
+set -euo pipefail
+
+LIVE_USERNAME="$LIVE_USERNAME"
+LIVE_FULLNAME="$LIVE_FULLNAME"
+LIVE_PASSWORD="$LIVE_USERNAME"
+
+if ! id "\$LIVE_USERNAME" >/dev/null 2>&1; then
+  useradd -m -s /bin/bash -c "\$LIVE_FULLNAME" "\$LIVE_USERNAME"
+fi
+
+echo "\$LIVE_USERNAME:\$LIVE_PASSWORD" | chpasswd
+usermod -U "\$LIVE_USERNAME" 2>/dev/null || true
+
+for group in sudo audio video plugdev netdev users cdrom; do
+  if getent group "\$group" >/dev/null 2>&1; then
+    usermod -aG "\$group" "\$LIVE_USERNAME" || true
+  fi
+done
+
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat > /etc/lightdm/lightdm.conf.d/50-nexos-live-autologin.conf <<LIGHTDM
+[Seat:*]
+autologin-user=$LIVE_USERNAME
+autologin-user-timeout=0
+autologin-session=xfce
+user-session=xfce
+greeter-session=lightdm-gtk-greeter
+LIGHTDM
+
+mkdir -p "/home/\$LIVE_USERNAME/Desktop"
+cat > "/home/\$LIVE_USERNAME/Desktop/README-NexOS-Login.txt" <<README
+NexOS live login:
+Username: $LIVE_USERNAME
+Password: $LIVE_USERNAME
+
+Autologin should start automatically. If the login screen appears, use the credentials above.
+README
+chown -R "\$LIVE_USERNAME:\$LIVE_USERNAME" "/home/\$LIVE_USERNAME"
+chmod 0755 "/home/\$LIVE_USERNAME/Desktop" || true
+HOOK
+chmod 0755 "$LB_CONFIG_DIR/hooks/normal/020-nexos-force-live-login.hook.chroot"
+
 log "Starting live-build. This downloads Debian packages and may take a while."
 log "Target ISO: $ARTIFACT_ISO"
 
