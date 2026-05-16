@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Injects NexOS visual polish and VM display fixes.
 # Goal: stop the ISO from looking tiny/cluttered in VirtualBox and make the desktop cleaner.
-# This script also chains boot-branding, icon-fix, and final desktop layout injectors.
+# This script also chains boot-branding, icon-fix, desktop layout, and final UI fix injectors.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -98,6 +98,7 @@ cat > /usr/local/bin/nexos-visual-setup <<'VISUAL'
 set -euo pipefail
 nexos-display-fix || true
 nexos-clean-desktop || true
+nexos-trust-launchers || true
 if [[ -f /usr/share/backgrounds/nexos/nexos-default.png ]]; then
   for monitor in monitorVirtual-1 monitorVirtual1 monitor0 monitorVGA-1; do
     xfconf-query -c xfce4-desktop -p /backdrop/screen0/$monitor/workspace0/last-image -n -t string -s /usr/share/backgrounds/nexos/nexos-default.png 2>/dev/null || true
@@ -163,5 +164,6 @@ chmod 0755 "$LB_CONFIG_DIR/hooks/normal/090-nexos-visual-polish.hook.chroot"
 bash "$SCRIPT_DIR/16-inject-nexos-branding-boot.sh"
 bash "$SCRIPT_DIR/17-inject-nexos-icons-fix.sh"
 bash "$SCRIPT_DIR/18-inject-nexos-desktop-layout.sh"
+bash "$SCRIPT_DIR/20-inject-nexos-ui-final-fix.sh"
 
-success "Injected NexOS visual polish, branding, icons, and cleaner desktop layout for $NEXOS_EDITION."
+success "Injected NexOS visual polish, branding, icons, desktop layout, and final UI fixes for $NEXOS_EDITION."
