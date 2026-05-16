@@ -55,6 +55,7 @@ jobs:
           mkdir -p build/logs iso
           EDITION="${{ github.event.inputs.edition || 'main' }}"
 
+          set +e
           docker run --privileged --rm \
             -v "$PWD:/work" \
             -w /work \
@@ -92,14 +93,11 @@ jobs:
                 exit 2
               fi
 
-              # GitHub web uploads can remove Linux executable permissions.
               find scripts -type f -name "*.sh" -exec chmod +x {} +
               if [[ -d testing ]]; then
                 find testing -type f -name "*.sh" -exec chmod +x {} +
               fi
 
-              # Syntax check scripts, but do not stop here. If a script is bad,
-              # the full build log will still show exactly where it broke.
               syntax_failed=0
               for script in \
                 scripts/02-init-live-build.sh \
@@ -148,6 +146,49 @@ jobs:
 
               ls -lh iso
             '
+          code=$?
+          echo "$code" > build/logs/github-actions-exit-code.txt
+          exit 0
+
+      - name: Print NexOS build error summary
+        if: always()
+        run: |
+          mkdir -p build/logs
+          code="0"
+          if [[ -f build/logs/github-actions-exit-code.txt ]]; then
+            code="$(cat build/logs/github-actions-exit-code.txt)"
+          fi
+
+          echo "## NexOS ISO build diagnostics" >> "$GITHUB_STEP_SUMMARY"
+          echo "Exit code: $code" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Available logs" >> "$GITHUB_STEP_SUMMARY"
+          find build/logs -type f -maxdepth 1 -printf '- %f\n' 2>/dev/null | sort >> "$GITHUB_STEP_SUMMARY" || true
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          combined="build/logs/github-actions-combined-tail.log"
+          : > "$combined"
+          for f in build/logs/*.log; do
+            [[ -f "$f" ]] || continue
+            echo "===== $f =====" >> "$combined"
+            tail -n 180 "$f" >> "$combined" || true
+            echo >> "$combined"
+          done
+
+          echo "### Last build log lines" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 140 "$combined" >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$code" != "0" ]]; then
+            first_error="$(grep -iE 'error|failed|unable to locate|not found|syntax error|no such file|E: ' "$combined" | head -n 1 || true)"
+            if [[ -z "$first_error" ]]; then
+              first_error="NexOS ISO build failed. Check build/logs/github-actions-combined-tail.log artifact."
+            fi
+            echo "::error title=NexOS ISO build failed::$first_error"
+            exit "$code"
+          fi
 
       - name: Show runner disk space after build
         if: always()
