@@ -3,8 +3,13 @@
 
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Do not overwrite SCRIPT_DIR from caller scripts.
+# Most NexOS scripts define SCRIPT_DIR before sourcing this file and then use it
+# again after sourcing. Older common.sh overwrote SCRIPT_DIR with scripts/lib,
+# which caused chained calls like scripts/15 -> scripts/16 to look inside
+# scripts/lib/16-inject-... and fail.
+COMMON_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$COMMON_SCRIPT_DIR/../.." && pwd)"
 CONFIG_FILE="$PROJECT_ROOT/build-config/nexos.conf"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
