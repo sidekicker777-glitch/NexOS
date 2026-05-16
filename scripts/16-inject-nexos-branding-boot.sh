@@ -302,16 +302,34 @@ cat > "$LB_CONFIG_DIR/hooks/normal/900-nexos-bootloader-branding.hook.binary" <<
 #!/usr/bin/env bash
 set -euo pipefail
 
-find . -type f \( -name '*.cfg' -o -name '*.txt' -o -name '*.conf' \) 2>/dev/null | while read -r file; do
-  sed -i \
-    -e 's/Debian GNU\/Linux 13 (trixie)/NexOS Origin/g' \
+# live-build still creates bootloader menus from Debian templates.
+# This late binary hook removes visible Debian/hardhat branding from every
+# generated bootloader text file and strips the default background image.
+find . -type f \( -name '*.cfg' -o -name '*.txt' -o -name '*.conf' -o -name '*.theme' \) 2>/dev/null | while read -r file; do
+  sed -i -E \
+    -e 's/Debian GNU\/Linux[[:space:]]+[0-9][^)]*\([^)]+\)[[:space:]]+amd64/NexOS Origin amd64/g' \
+    -e 's/Debian GNU\/Linux[[:space:]]+[0-9][^)]*\([^)]+\)/NexOS Origin/g' \
+    -e 's/Debian GNU\/Linux 13 \(trixie\)/NexOS Origin/g' \
     -e 's/Debian GNU\/Linux/NexOS/g' \
     -e 's/Debian Live/NexOS Live/g' \
+    -e 's/Live system \(fail-safe mode\)/NexOS Live Desktop (safe graphics)/g' \
     -e 's/Live system/NexOS Live Desktop/g' \
-    -e 's/Live system (fail-safe mode)/NexOS Live Desktop (safe graphics)/g' \
     -e 's/amd64/NexOS amd64/g' \
+    -e '/^[[:space:]]*(MENU|menu)[[:space:]]+(BACKGROUND|background)[[:space:]]+/d' \
+    -e '/^[[:space:]]*background_image[[:space:]]+/d' \
     "$file" || true
 done
+
+# Remove the default Debian live splash/hardhat artwork from boot folders.
+# Without a MENU BACKGROUND line, syslinux falls back to a clean black menu.
+find . -type f \( -iname 'splash.png' -o -iname 'splash.jpg' -o -iname 'splash.svg' -o -iname '*debian*png' -o -iname '*debian*svg' \) -delete 2>/dev/null || true
+
+# Add an obvious marker file so we can tell the hook ran by inspecting artifacts.
+mkdir -p binary/.nexos 2>/dev/null || true
+cat > binary/.nexos/boot-branding.txt <<'MARKER'
+NexOS boot branding applied.
+Default Debian live boot text/background removed by 900-nexos-bootloader-branding.hook.binary.
+MARKER
 BINARYHOOK
 chmod 0755 "$LB_CONFIG_DIR/hooks/normal/900-nexos-bootloader-branding.hook.binary"
 
