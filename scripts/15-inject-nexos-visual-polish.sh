@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Injects NexOS visual polish and VM display fixes.
 # Goal: stop the ISO from looking tiny/cluttered in VirtualBox and make the desktop cleaner.
-# This script also chains boot-branding, icon-fix, desktop layout, and final UI fix injectors.
+# This script also chains boot-branding, icon-fix, desktop layout, final UI fix, and AI assistant injectors.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -86,7 +86,7 @@ mkdir -p "$desktop" "$HOME/.local/share/nexos-hidden-desktop-launchers"
 find "$desktop" -maxdepth 1 -type f -name '*.desktop' | while read -r file; do
   base="$(basename "$file")"
   case "$base" in
-    "NexOS Control Center.desktop"|"NexOS Install Center.desktop"|"NexOS Dev Center.desktop"|"NexOS Help.desktop"|"NexOS Power.desktop"|"NexOS Startup Center.desktop"|"NexOS VM Display Help.desktop") ;;
+    "NexOS Control Center.desktop"|"NexOS Install Center.desktop"|"NexOS Dev Center.desktop"|"NexOS Help.desktop"|"NexOS Power.desktop"|"NexOS Startup Center.desktop"|"NexOS VM Display Help.desktop"|"NexOS Assistant.desktop") ;;
     *) mv -f "$file" "$HOME/.local/share/nexos-hidden-desktop-launchers/$base" 2>/dev/null || rm -f "$file" ;;
   esac
 done
@@ -165,5 +165,6 @@ bash "$SCRIPT_DIR/16-inject-nexos-branding-boot.sh"
 bash "$SCRIPT_DIR/17-inject-nexos-icons-fix.sh"
 bash "$SCRIPT_DIR/18-inject-nexos-desktop-layout.sh"
 bash "$SCRIPT_DIR/20-inject-nexos-ui-final-fix.sh"
+bash "$SCRIPT_DIR/21-inject-nexos-ai-assistant.sh"
 
-success "Injected NexOS visual polish, branding, icons, desktop layout, and final UI fixes for $NEXOS_EDITION."
+success "Injected NexOS visual polish, branding, icons, desktop layout, UI fixes, and AI assistant for $NEXOS_EDITION."
