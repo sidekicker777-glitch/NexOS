@@ -166,5 +166,6 @@ bash "$SCRIPT_DIR/17-inject-nexos-icons-fix.sh"
 bash "$SCRIPT_DIR/18-inject-nexos-desktop-layout.sh"
 bash "$SCRIPT_DIR/20-inject-nexos-ui-final-fix.sh"
 bash "$SCRIPT_DIR/21-inject-nexos-ai-assistant.sh"
+bash "$SCRIPT_DIR/22-inject-nexos-ai-assistant-v2.sh"
 
-success "Injected NexOS visual polish, branding, icons, desktop layout, UI fixes, and AI assistant for $NEXOS_EDITION."
+success "Injected NexOS visual polish, branding, icons, desktop layout, UI fixes, and AI assistant v2 for $NEXOS_EDITION."
