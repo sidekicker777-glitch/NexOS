@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Injects NexOS visual polish and VM display fixes.
 # Goal: stop the ISO from looking tiny/cluttered in VirtualBox and make the desktop cleaner.
-# This script also chains boot-branding, icon-fix, desktop layout, final UI fix, AI assistant, and desktop overhaul injectors.
+# This script also chains boot-branding, icon-fix, desktop layout, final UI fix, AI assistant, desktop overhaul, and emulator center injectors.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -169,5 +169,6 @@ bash "$SCRIPT_DIR/20-inject-nexos-ui-final-fix.sh"
 bash "$SCRIPT_DIR/21-inject-nexos-ai-assistant.sh"
 bash "$SCRIPT_DIR/22-inject-nexos-ai-assistant-v2.sh"
 bash "$SCRIPT_DIR/23-inject-nexos-desktop-overhaul.sh"
+bash "$SCRIPT_DIR/24-inject-nexos-emulator-center.sh"
 
-success "Injected NexOS visual polish, branding, icons, desktop layout, UI fixes, AI assistant v2, and desktop overhaul for $NEXOS_EDITION."
+success "Injected NexOS visual polish, branding, icons, desktop layout, UI fixes, AI assistant v2, desktop overhaul, and emulator center for $NEXOS_EDITION."
