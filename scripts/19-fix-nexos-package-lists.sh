@@ -10,11 +10,15 @@ source "$SCRIPT_DIR/lib/common.sh"
 ensure_dir "$LB_CONFIG_DIR/package-lists"
 ensure_dir "$LB_CONFIG_DIR/hooks/normal"
 
-# Late injector safety: if Game Library exists but was not chained by the visual pass,
-# run it here before package validation so its package list/hooks are included.
-if [[ -f "$SCRIPT_DIR/27-inject-nexos-game-library.sh" ]]; then
-  bash "$SCRIPT_DIR/27-inject-nexos-game-library.sh"
-fi
+# Late injector safety: run gaming/library/console features here before package validation
+# so their package lists and hooks are always included even when another chain misses them.
+for injector in \
+  27-inject-nexos-game-library.sh \
+  28-inject-nexos-console-mode.sh; do
+  if [[ -f "$SCRIPT_DIR/$injector" ]]; then
+    bash "$SCRIPT_DIR/$injector"
+  fi
+done
 
 OPTIONAL_UNSAFE_PACKAGES=(
   calamares
