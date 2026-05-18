@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Final package-list safety pass.
-# live-build fails hard if any package in package-lists/*.list.chroot is missing.
-# This script removes optional/unavailable packages from hard lists before lb build.
+# Also runs late optional feature injectors that need to be generated before package validation.
 
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,8 +10,12 @@ source "$SCRIPT_DIR/lib/common.sh"
 ensure_dir "$LB_CONFIG_DIR/package-lists"
 ensure_dir "$LB_CONFIG_DIR/hooks/normal"
 
-# Keep this broad. These are nice-to-have packages that can disappear, be renamed,
-# or only exist in some Debian archive combinations. They should never break ISO builds.
+# Late injector safety: if Game Library exists but was not chained by the visual pass,
+# run it here before package validation so its package list/hooks are included.
+if [[ -f "$SCRIPT_DIR/27-inject-nexos-game-library.sh" ]]; then
+  bash "$SCRIPT_DIR/27-inject-nexos-game-library.sh"
+fi
+
 OPTIONAL_UNSAFE_PACKAGES=(
   calamares
   calamares-settings-debian
@@ -61,7 +64,6 @@ for list in "$LB_CONFIG_DIR"/package-lists/*.list.chroot; do
   tmp="$list.tmp"
   : > "$tmp"
   while IFS= read -r line || [[ -n "$line" ]]; do
-    # Keep comments and blank lines.
     if [[ -z "${line// }" || "$line" =~ ^[[:space:]]*# ]]; then
       echo "$line" >> "$tmp"
       continue
@@ -88,15 +90,12 @@ for list in "$LB_CONFIG_DIR"/package-lists/*.list.chroot; do
     echo "$line" >> "$tmp"
   done < "$list"
 
-  # Collapse long blank sections but preserve comments for diagnostics.
   awk 'NF || !blank {print} {blank=!NF}' "$tmp" > "$list"
   rm -f "$tmp"
 done
 
 sort -u "$removed_log" -o "$removed_log" || true
 
-# Conditional hook for packages removed from hard lists.
-# It tries to install them only when the package exists in the chroot apt cache.
 cat > "$LB_CONFIG_DIR/hooks/normal/015-nexos-optional-package-pass.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
 set -euo pipefail
