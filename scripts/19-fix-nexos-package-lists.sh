@@ -19,7 +19,8 @@ for injector in \
   30-inject-nexos-workspace-suite.sh \
   31-inject-nexos-file-center.sh \
   32-inject-nexos-update-center.sh \
-  33-inject-nexos-driver-center.sh; do
+  33-inject-nexos-driver-center.sh \
+  34-inject-nexos-archive-manager.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -62,6 +63,7 @@ OPTIONAL_UNSAFE_PACKAGES=(
   vulkan-tools
   pulseaudio-utils
   pavucontrol
+  p7zip-rar
 )
 
 is_optional_pkg() {
@@ -141,7 +143,7 @@ for pkg in \
   papirus-icon-theme arc-theme plymouth-themes fastfetch neofetch mesa-utils \
   openscap-scanner scap-security-guide \
   baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common \
-  lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol; do
+  lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar; do
   install_if_available "$pkg"
 done
 HOOK
