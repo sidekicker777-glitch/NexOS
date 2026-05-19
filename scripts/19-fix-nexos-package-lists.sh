@@ -20,7 +20,8 @@ for injector in \
   31-inject-nexos-file-center.sh \
   32-inject-nexos-update-center.sh \
   33-inject-nexos-driver-center.sh \
-  34-inject-nexos-archive-manager.sh; do
+  34-inject-nexos-archive-manager.sh \
+  35-inject-nexos-code-editor.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -64,6 +65,10 @@ OPTIONAL_UNSAFE_PACKAGES=(
   pulseaudio-utils
   pavucontrol
   p7zip-rar
+  build-essential
+  nodejs
+  npm
+  ripgrep
 )
 
 is_optional_pkg() {
@@ -143,7 +148,8 @@ for pkg in \
   papirus-icon-theme arc-theme plymouth-themes fastfetch neofetch mesa-utils \
   openscap-scanner scap-security-guide \
   baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common \
-  lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar; do
+  lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar \
+  build-essential nodejs npm ripgrep; do
   install_if_available "$pkg"
 done
 HOOK
