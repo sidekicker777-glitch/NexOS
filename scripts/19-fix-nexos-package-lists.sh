@@ -23,7 +23,8 @@ for injector in \
   34-inject-nexos-archive-manager.sh \
   35-inject-nexos-code-editor.sh \
   36-inject-nexos-settings-app.sh \
-  37-inject-nexos-first-run-wizard.sh; do
+  37-inject-nexos-first-run-wizard.sh \
+  38-inject-nexos-install-center-v2.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -73,6 +74,8 @@ OPTIONAL_UNSAFE_PACKAGES=(
   ripgrep
   arandr
   brightnessctl
+  os-prober
+  efibootmgr
 )
 
 is_optional_pkg() {
@@ -153,7 +156,7 @@ for pkg in \
   openscap-scanner scap-security-guide \
   baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common \
   lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar \
-  build-essential nodejs npm ripgrep arandr brightnessctl; do
+  build-essential nodejs npm ripgrep arandr brightnessctl os-prober efibootmgr; do
   install_if_available "$pkg"
 done
 HOOK
