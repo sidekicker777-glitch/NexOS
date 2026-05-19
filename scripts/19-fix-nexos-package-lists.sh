@@ -10,11 +10,13 @@ source "$SCRIPT_DIR/lib/common.sh"
 ensure_dir "$LB_CONFIG_DIR/package-lists"
 ensure_dir "$LB_CONFIG_DIR/hooks/normal"
 
-# Late injector safety: run gaming/library/console features here before package validation
-# so their package lists and hooks are always included even when another chain misses them.
+# Late injector safety: run broad features before package validation so their
+# package lists and hooks are always included even if another chain misses them.
 for injector in \
   27-inject-nexos-game-library.sh \
-  28-inject-nexos-console-mode.sh; do
+  28-inject-nexos-console-mode.sh \
+  29-inject-nexos-control-suite-v2.sh \
+  30-inject-nexos-workspace-suite.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -43,6 +45,12 @@ OPTIONAL_UNSAFE_PACKAGES=(
   scap-security-guide
   dbeaver-ce
   openjdk-21-jdk
+  baobab
+  gparted
+  timeshift
+  bleachbit
+  synaptic
+  flatpak
 )
 
 is_optional_pkg() {
@@ -120,7 +128,8 @@ for pkg in \
   firmware-misc-nonfree \
   xfce4-appmenu-plugin xfce4-pulseaudio-plugin xfce4-statusnotifier-plugin xfce4-datetime-plugin xfce4-notifyd \
   papirus-icon-theme arc-theme plymouth-themes fastfetch neofetch mesa-utils \
-  openscap-scanner scap-security-guide; do
+  openscap-scanner scap-security-guide \
+  baobab gparted timeshift bleachbit synaptic flatpak; do
   install_if_available "$pkg"
 done
 HOOK
