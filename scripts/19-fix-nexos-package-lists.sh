@@ -16,7 +16,8 @@ for injector in \
   27-inject-nexos-game-library.sh \
   28-inject-nexos-console-mode.sh \
   29-inject-nexos-control-suite-v2.sh \
-  30-inject-nexos-workspace-suite.sh; do
+  30-inject-nexos-workspace-suite.sh \
+  31-inject-nexos-file-center.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
