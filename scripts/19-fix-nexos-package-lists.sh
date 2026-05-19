@@ -24,7 +24,8 @@ for injector in \
   35-inject-nexos-code-editor.sh \
   36-inject-nexos-settings-app.sh \
   37-inject-nexos-first-run-wizard.sh \
-  38-inject-nexos-install-center-v2.sh; do
+  38-inject-nexos-install-center-v2.sh \
+  39-inject-nexos-software-center.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
