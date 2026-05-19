@@ -18,7 +18,8 @@ for injector in \
   29-inject-nexos-control-suite-v2.sh \
   30-inject-nexos-workspace-suite.sh \
   31-inject-nexos-file-center.sh \
-  32-inject-nexos-update-center.sh; do
+  32-inject-nexos-update-center.sh \
+  33-inject-nexos-driver-center.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -56,6 +57,11 @@ OPTIONAL_UNSAFE_PACKAGES=(
   aptitude
   apt-listchanges
   software-properties-common
+  lshw
+  hwinfo
+  vulkan-tools
+  pulseaudio-utils
+  pavucontrol
 )
 
 is_optional_pkg() {
@@ -134,7 +140,8 @@ for pkg in \
   xfce4-appmenu-plugin xfce4-pulseaudio-plugin xfce4-statusnotifier-plugin xfce4-datetime-plugin xfce4-notifyd \
   papirus-icon-theme arc-theme plymouth-themes fastfetch neofetch mesa-utils \
   openscap-scanner scap-security-guide \
-  baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common; do
+  baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common \
+  lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol; do
   install_if_available "$pkg"
 done
 HOOK
