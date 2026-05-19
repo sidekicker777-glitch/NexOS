@@ -11,17 +11,9 @@ python3
 python3-tk
 xdg-utils
 libnotify-bin
-lsblk
 parted
-gparted
-calamares
-calamares-settings-debian
 rsync
 util-linux
-os-prober
-efibootmgr
-grub-efi-amd64
-grub-pc
 PKGS
 cat > "$LB_CONFIG_DIR/hooks/normal/300-nexos-install-center-v2.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
@@ -32,7 +24,9 @@ home_dir="/home/$LIVE_USERNAME"
 icon_dir="/usr/share/icons/hicolor/scalable/apps"
 install_if_available(){ local p="$1"; if apt-cache show "$p" >/dev/null 2>&1; then apt-get install -y --no-install-recommends "$p" || true; fi; }
 apt-get update || true
-for p in python3 python3-tk xdg-utils libnotify-bin parted gparted calamares calamares-settings-debian rsync util-linux os-prober efibootmgr grub-efi-amd64 grub-pc; do install_if_available "$p"; done
+for p in python3 python3-tk xdg-utils libnotify-bin parted gparted calamares calamares-settings-debian rsync util-linux os-prober efibootmgr; do install_if_available "$p"; done
+# Do not install both grub-pc and grub-efi-amd64 in the live image. They conflict.
+# Calamares/install tooling should select the correct bootloader for the target machine during install.
 mkdir -p /opt/nexos/install-center "$icon_dir" /usr/local/bin /usr/share/applications /usr/share/nexos "$home_dir/NexOS/Reports" "$home_dir/.config/nexos/install-center"
 cat > "$icon_dir/nexos-install-center.svg" <<'SVG'
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect x="8" y="8" width="112" height="112" rx="28" fill="#020617" stroke="#22c55e" stroke-width="4"/><path d="M64 27v45M44 53l20 20 20-20" fill="none" stroke="#e8f7ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><rect x="34" y="86" width="60" height="16" rx="6" fill="none" stroke="#38bdf8" stroke-width="7"/></svg>
@@ -120,6 +114,7 @@ cat >> /usr/share/nexos/app-map.txt <<'APPMAP'
 
 NexOS Install Center v2:
 - Adds installer hub, disk/boot readiness report, GParted/Calamares launchers, post-install setup, dock/menu entries, and assistant catalog entries.
+- Keeps conflicting bootloader packages out of hard package lists so the live ISO can build; installer tooling picks BIOS/UEFI bootloader at install time.
 APPMAP
 chown -R "$LIVE_USERNAME:$LIVE_USERNAME" "$home_dir" 2>/dev/null || true
 mkdir -p /etc/skel; rsync -a "$home_dir/" /etc/skel/ 2>/dev/null || true
