@@ -26,7 +26,8 @@ for injector in \
   37-inject-nexos-first-run-wizard.sh \
   38-inject-nexos-install-center-v2.sh \
   39-inject-nexos-software-center.sh \
-  40-inject-nexos-branding-v2.sh; do
+  40-inject-nexos-branding-v2.sh \
+  41-inject-nexos-boot-splash-v2.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -49,6 +50,9 @@ OPTIONAL_UNSAFE_PACKAGES=(
   arc-theme
   plymouth-themes
   plymouth
+  grub-common
+  grub-pc-bin
+  grub-efi-amd64-bin
   fastfetch
   neofetch
   mesa-utils
@@ -157,7 +161,7 @@ for pkg in \
   xserver-xorg-video-vmware xserver-xorg-video-qxl \
   firmware-misc-nonfree \
   xfce4-appmenu-plugin xfce4-pulseaudio-plugin xfce4-statusnotifier-plugin xfce4-datetime-plugin xfce4-notifyd \
-  papirus-icon-theme arc-theme plymouth-themes plymouth fastfetch neofetch mesa-utils \
+  papirus-icon-theme arc-theme plymouth-themes plymouth grub-common grub-pc-bin grub-efi-amd64-bin fastfetch neofetch mesa-utils \
   openscap-scanner scap-security-guide \
   baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common \
   lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar \
