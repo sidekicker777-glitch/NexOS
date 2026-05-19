@@ -17,7 +17,8 @@ for injector in \
   28-inject-nexos-console-mode.sh \
   29-inject-nexos-control-suite-v2.sh \
   30-inject-nexos-workspace-suite.sh \
-  31-inject-nexos-file-center.sh; do
+  31-inject-nexos-file-center.sh \
+  32-inject-nexos-update-center.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -52,6 +53,9 @@ OPTIONAL_UNSAFE_PACKAGES=(
   bleachbit
   synaptic
   flatpak
+  aptitude
+  apt-listchanges
+  software-properties-common
 )
 
 is_optional_pkg() {
@@ -130,7 +134,7 @@ for pkg in \
   xfce4-appmenu-plugin xfce4-pulseaudio-plugin xfce4-statusnotifier-plugin xfce4-datetime-plugin xfce4-notifyd \
   papirus-icon-theme arc-theme plymouth-themes fastfetch neofetch mesa-utils \
   openscap-scanner scap-security-guide \
-  baobab gparted timeshift bleachbit synaptic flatpak; do
+  baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common; do
   install_if_available "$pkg"
 done
 HOOK
