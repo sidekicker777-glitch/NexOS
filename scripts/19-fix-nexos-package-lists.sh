@@ -25,7 +25,8 @@ for injector in \
   36-inject-nexos-settings-app.sh \
   37-inject-nexos-first-run-wizard.sh \
   38-inject-nexos-install-center-v2.sh \
-  39-inject-nexos-software-center.sh; do
+  39-inject-nexos-software-center.sh \
+  40-inject-nexos-branding-v2.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -47,6 +48,7 @@ OPTIONAL_UNSAFE_PACKAGES=(
   papirus-icon-theme
   arc-theme
   plymouth-themes
+  plymouth
   fastfetch
   neofetch
   mesa-utils
@@ -77,6 +79,8 @@ OPTIONAL_UNSAFE_PACKAGES=(
   brightnessctl
   os-prober
   efibootmgr
+  lightdm
+  lightdm-gtk-greeter
 )
 
 is_optional_pkg() {
@@ -153,11 +157,12 @@ for pkg in \
   xserver-xorg-video-vmware xserver-xorg-video-qxl \
   firmware-misc-nonfree \
   xfce4-appmenu-plugin xfce4-pulseaudio-plugin xfce4-statusnotifier-plugin xfce4-datetime-plugin xfce4-notifyd \
-  papirus-icon-theme arc-theme plymouth-themes fastfetch neofetch mesa-utils \
+  papirus-icon-theme arc-theme plymouth-themes plymouth fastfetch neofetch mesa-utils \
   openscap-scanner scap-security-guide \
   baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common \
   lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar \
-  build-essential nodejs npm ripgrep arandr brightnessctl os-prober efibootmgr; do
+  build-essential nodejs npm ripgrep arandr brightnessctl os-prober efibootmgr \
+  lightdm lightdm-gtk-greeter; do
   install_if_available "$pkg"
 done
 HOOK
