@@ -40,7 +40,8 @@ for injector in \
   51-inject-nexos-control-panel-unified.sh \
   52-inject-nexos-desktop-shell-polish-v2.sh \
   53-inject-nexos-iso-doctor.sh \
-  54-inject-nexos-build-fix-pass.sh; do
+  54-inject-nexos-build-fix-pass.sh \
+  55-inject-nexos-build-validation-report.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
