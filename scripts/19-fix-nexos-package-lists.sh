@@ -46,7 +46,8 @@ for injector in \
   57-inject-nexos-desktop-ux-final-pass.sh \
   58-inject-nexos-final-smoke-test-pack.sh \
   59-inject-nexos-release-readiness-center.sh \
-  60-inject-nexos-final-source-build-audit.sh; do
+  60-inject-nexos-final-source-build-audit.sh \
+  61-inject-nexos-release-notes-pack.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
