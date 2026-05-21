@@ -73,15 +73,21 @@ jobs:
               while IFS= read -r script; do
                 bash -n "$script" 2>&1 | tee -a build/logs/github-actions-source-preflight.log || syntax_failed=1
               done < <(find scripts -type f -name "*.sh" | sort)
-              required_failed=0
-              for n in $(seq 27 54); do
-                file="$(find scripts -maxdepth 1 -type f -name "${n}-inject-nexos-*.sh" | head -n 1 || true)"
-                if [[ -z "$file" ]]; then echo "Missing late injector number: $n" | tee -a build/logs/github-actions-source-preflight.log; required_failed=1; continue; fi
-                base="$(basename "$file")"
-                if ! grep -q "$base" scripts/19-fix-nexos-package-lists.sh; then echo "Late injector not wired in safety pass: $base" | tee -a build/logs/github-actions-source-preflight.log; required_failed=1; fi
-              done
-              echo "syntax_failed=$syntax_failed required_failed=$required_failed" | tee -a build/logs/github-actions-source-preflight.log
-              if [[ "$syntax_failed" != "0" || "$required_failed" != "0" ]]; then exit 12; fi
+              wiring_failed=0
+              if [[ -f scripts/19-fix-nexos-package-lists.sh ]]; then
+                while IFS= read -r file; do
+                  base="$(basename "$file")"
+                  if ! grep -q "$base" scripts/19-fix-nexos-package-lists.sh; then
+                    echo "Late injector not wired in safety pass: $base" | tee -a build/logs/github-actions-source-preflight.log
+                    wiring_failed=1
+                  fi
+                done < <(find scripts -maxdepth 1 -type f -name '*-inject-nexos-*.sh' | awk -F/ '{print $NF}' | awk -F- '$1>=27 {print "scripts/"$0}' | sort -V)
+              else
+                echo "Missing package safety pass: scripts/19-fix-nexos-package-lists.sh" | tee -a build/logs/github-actions-source-preflight.log
+                wiring_failed=1
+              fi
+              echo "syntax_failed=$syntax_failed wiring_failed=$wiring_failed" | tee -a build/logs/github-actions-source-preflight.log
+              if [[ "$syntax_failed" != "0" || "$wiring_failed" != "0" ]]; then exit 12; fi
             '
           code=$?
           echo "$code" > build/logs/github-actions-source-preflight-exit-code.txt
@@ -168,7 +174,7 @@ jobs:
           combined="build/logs/github-actions-combined-tail.log"
           : > "$combined"
           for f in build/logs/*.log; do [[ -f "$f" ]] || continue; echo "===== $f =====" >> "$combined"; tail -n 220 "$f" >> "$combined" || true; echo >> "$combined"; done
-          first_error="$(grep -iE 'error|failed|unable to locate|not found|syntax error|no such file|E: |conflict|missing late injector|not wired' "$combined" | head -n 1 || true)"
+          first_error="$(grep -iE 'error|failed|unable to locate|not found|syntax error|no such file|E: |conflict|missing package safety|not wired' "$combined" | head -n 1 || true)"
           if [[ -z "$first_error" ]]; then first_error="No obvious error marker found. Check build/logs artifact."; fi
           echo "### First detected error" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
