@@ -32,7 +32,8 @@ for injector in \
   43-inject-nexos-action-center.sh \
   44-inject-nexos-power-center.sh \
   45-inject-nexos-search-center.sh \
-  46-inject-nexos-task-manager.sh; do
+  46-inject-nexos-task-manager.sh \
+  47-inject-nexos-backup-restore-center-v2.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
