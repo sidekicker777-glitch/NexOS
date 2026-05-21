@@ -33,7 +33,8 @@ for injector in \
   44-inject-nexos-power-center.sh \
   45-inject-nexos-search-center.sh \
   46-inject-nexos-task-manager.sh \
-  47-inject-nexos-backup-restore-center-v2.sh; do
+  47-inject-nexos-backup-restore-center-v2.sh \
+  48-inject-nexos-security-center-main.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -107,6 +108,9 @@ OPTIONAL_UNSAFE_PACKAGES=(
   nethogs
   xfce4-taskmanager
   gnome-system-monitor
+  ufw
+  gufw
+  net-tools
 )
 
 is_optional_pkg() {
@@ -189,7 +193,8 @@ for pkg in \
   lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar \
   build-essential nodejs npm ripgrep arandr brightnessctl os-prober efibootmgr \
   lightdm lightdm-gtk-greeter wmctrl network-manager-gnome acpi upower xfce4-power-manager xfce4-screensaver light-locker \
-  mlocate catfish sysstat lsof htop iotop nethogs xfce4-taskmanager gnome-system-monitor; do
+  mlocate catfish sysstat lsof htop iotop nethogs xfce4-taskmanager gnome-system-monitor \
+  ufw gufw net-tools; do
   install_if_available "$pkg"
 done
 HOOK
