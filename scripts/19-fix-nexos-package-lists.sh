@@ -37,7 +37,8 @@ for injector in \
   48-inject-nexos-security-center-main.sh \
   49-inject-nexos-network-center-v2.sh \
   50-inject-nexos-personalization-center.sh \
-  51-inject-nexos-control-panel-unified.sh; do
+  51-inject-nexos-control-panel-unified.sh \
+  52-inject-nexos-desktop-shell-polish-v2.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
