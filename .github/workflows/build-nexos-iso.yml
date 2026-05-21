@@ -133,6 +133,42 @@ jobs:
               echo "syntax_failed=$syntax_failed" | tee -a build/logs/github-actions-preflight.log
               if [[ "$syntax_failed" != "0" ]]; then exit 13; fi
               if [[ -f scripts/19-fix-nexos-package-lists.sh ]]; then bash scripts/19-fix-nexos-package-lists.sh 2>&1 | tee build/logs/github-actions-package-safety.log; fi
+
+              validation="build/logs/nexos-build-validation-report.txt"
+              : > "$validation"
+              {
+                echo "NexOS Build Validation Report"
+                echo "============================="
+                date
+                echo
+                echo "Edition: $NEXOS_EDITION"
+                echo
+                echo "Late injectors wired in safety pass:"
+                if [[ -f scripts/19-fix-nexos-package-lists.sh ]]; then
+                  grep -E "^[[:space:]]+[0-9]+-inject-nexos-.*\.sh" scripts/19-fix-nexos-package-lists.sh | sed "s/^[[:space:]]*/- /" || true
+                else
+                  echo "- missing scripts/19-fix-nexos-package-lists.sh"
+                fi
+                echo
+                echo "Injector files present:"
+                find scripts -maxdepth 1 -type f -name "*-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true
+                echo
+                echo "Generated package lists after safety pass:"
+                find config/package-lists -maxdepth 1 -type f -name "*.list.chroot" -printf "- %f\n" | sort || true
+                echo
+                echo "Optional packages moved out of hard lists:"
+                if [[ -f config/nexos-removed-optional-packages.txt ]]; then sed "s/^/- /" config/nexos-removed-optional-packages.txt; else echo "- none recorded"; fi
+                echo
+                echo "Generated normal hooks:"
+                find config/hooks/normal -maxdepth 1 -type f -printf "- %f\n" | sort || true
+                echo
+                echo "Expected NexOS desktop apps from injectors:"
+                grep -R "Name=NexOS" -n scripts/*inject-nexos-*.sh 2>/dev/null | sed "s/^/- /" | head -200 || true
+                echo
+                echo "Expected NexOS commands from injectors:"
+                grep -R "cat > /usr/local/bin/nexos-" -n scripts/*inject-nexos-*.sh 2>/dev/null | sed "s/^/- /" | head -240 || true
+              } | tee -a "$validation"
+
               set -e
               if [[ "$NEXOS_EDITION" == "all" ]]; then
                 make iso-main 2>&1 | tee build/logs/github-actions-main-iso.log
@@ -171,6 +207,13 @@ jobs:
           echo "### Available logs" >> "$GITHUB_STEP_SUMMARY"
           find build/logs -maxdepth 1 -type f -printf '- %f\n' 2>/dev/null | sort >> "$GITHUB_STEP_SUMMARY" || true
           echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [[ -f build/logs/nexos-build-validation-report.txt ]]; then
+            echo "### Build validation report preview" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            head -n 120 build/logs/nexos-build-validation-report.txt >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
           combined="build/logs/github-actions-combined-tail.log"
           : > "$combined"
           for f in build/logs/*.log; do [[ -f "$f" ]] || continue; echo "===== $f =====" >> "$combined"; tail -n 220 "$f" >> "$combined" || true; echo >> "$combined"; done
