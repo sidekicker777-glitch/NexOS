@@ -28,7 +28,8 @@ for injector in \
   39-inject-nexos-software-center.sh \
   40-inject-nexos-branding-v2.sh \
   41-inject-nexos-boot-splash-v2.sh \
-  42-inject-nexos-session-mode-switcher.sh; do
+  42-inject-nexos-session-mode-switcher.sh \
+  43-inject-nexos-action-center.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -87,6 +88,8 @@ OPTIONAL_UNSAFE_PACKAGES=(
   lightdm
   lightdm-gtk-greeter
   wmctrl
+  network-manager-gnome
+  acpi
 )
 
 is_optional_pkg() {
@@ -168,7 +171,7 @@ for pkg in \
   baobab gparted timeshift bleachbit synaptic flatpak aptitude apt-listchanges software-properties-common \
   lshw hwinfo vulkan-tools pulseaudio-utils pavucontrol p7zip-rar \
   build-essential nodejs npm ripgrep arandr brightnessctl os-prober efibootmgr \
-  lightdm lightdm-gtk-greeter wmctrl; do
+  lightdm lightdm-gtk-greeter wmctrl network-manager-gnome acpi; do
   install_if_available "$pkg"
 done
 HOOK
