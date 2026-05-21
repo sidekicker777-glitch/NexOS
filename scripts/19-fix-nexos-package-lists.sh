@@ -42,7 +42,8 @@ for injector in \
   53-inject-nexos-iso-doctor.sh \
   54-inject-nexos-build-fix-pass.sh \
   55-inject-nexos-build-validation-report.sh \
-  56-inject-nexos-app-icon-validation-fix-pass.sh; do
+  56-inject-nexos-app-icon-validation-fix-pass.sh \
+  57-inject-nexos-desktop-ux-final-pass.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
