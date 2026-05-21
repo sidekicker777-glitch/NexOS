@@ -38,7 +38,8 @@ for injector in \
   49-inject-nexos-network-center-v2.sh \
   50-inject-nexos-personalization-center.sh \
   51-inject-nexos-control-panel-unified.sh \
-  52-inject-nexos-desktop-shell-polish-v2.sh; do
+  52-inject-nexos-desktop-shell-polish-v2.sh \
+  53-inject-nexos-iso-doctor.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -118,6 +119,9 @@ OPTIONAL_UNSAFE_PACKAGES=(
   dnsutils
   traceroute
   fontconfig
+  shellcheck
+  python3-yaml
+  jq
 )
 
 is_optional_pkg() {
@@ -201,7 +205,7 @@ for pkg in \
   build-essential nodejs npm ripgrep arandr brightnessctl os-prober efibootmgr \
   lightdm lightdm-gtk-greeter wmctrl network-manager-gnome acpi upower xfce4-power-manager xfce4-screensaver light-locker \
   mlocate catfish sysstat lsof htop iotop nethogs xfce4-taskmanager gnome-system-monitor \
-  ufw gufw net-tools dnsutils traceroute fontconfig; do
+  ufw gufw net-tools dnsutils traceroute fontconfig shellcheck python3-yaml jq; do
   install_if_available "$pkg"
 done
 HOOK
