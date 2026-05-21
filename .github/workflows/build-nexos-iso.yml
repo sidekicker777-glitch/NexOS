@@ -8,15 +8,9 @@ on:
         required: true
         default: 'main'
         type: choice
-        options:
-          - main
-          - tools
-          - security
-          - all
+        options: [main, tools, security, all]
   push:
-    branches:
-      - main
-      - master
+    branches: [main, master]
     paths:
       - 'Makefile'
       - 'build-config/**'
@@ -144,11 +138,7 @@ jobs:
                 echo "Edition: $NEXOS_EDITION"
                 echo
                 echo "Late injectors wired in safety pass:"
-                if [[ -f scripts/19-fix-nexos-package-lists.sh ]]; then
-                  grep -E "^[[:space:]]+[0-9]+-inject-nexos-.*\.sh" scripts/19-fix-nexos-package-lists.sh | sed "s/^[[:space:]]*/- /" || true
-                else
-                  echo "- missing scripts/19-fix-nexos-package-lists.sh"
-                fi
+                if [[ -f scripts/19-fix-nexos-package-lists.sh ]]; then grep -E "^[[:space:]]+[0-9]+-inject-nexos-.*\.sh" scripts/19-fix-nexos-package-lists.sh | sed "s/^[[:space:]]*/- /" || true; else echo "- missing scripts/19-fix-nexos-package-lists.sh"; fi
                 echo
                 echo "Injector files present:"
                 find scripts -maxdepth 1 -type f -name "*-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true
@@ -184,6 +174,8 @@ jobs:
                 smoke_check "final smoke injector wired" grep -q "58-inject-nexos-final-smoke-test-pack.sh" scripts/19-fix-nexos-package-lists.sh
                 smoke_check "release readiness injector exists" test -f scripts/59-inject-nexos-release-readiness-center.sh
                 smoke_check "release readiness injector wired" grep -q "59-inject-nexos-release-readiness-center.sh" scripts/19-fix-nexos-package-lists.sh
+                smoke_check "source audit injector exists" test -f scripts/60-inject-nexos-final-source-build-audit.sh
+                smoke_check "source audit injector wired" grep -q "60-inject-nexos-final-source-build-audit.sh" scripts/19-fix-nexos-package-lists.sh
                 smoke_check "desktop ux injector exists" test -f scripts/57-inject-nexos-desktop-ux-final-pass.sh
                 smoke_check "app icon injector exists" test -f scripts/56-inject-nexos-app-icon-validation-fix-pass.sh
                 smoke_soft "control panel injector exists" test -f scripts/51-inject-nexos-control-panel-unified.sh
@@ -198,7 +190,7 @@ jobs:
                 echo "Summary: PASS=$pass WARN=$warn FAIL=$fail"
                 echo
                 echo "Core late injectors:"
-                find scripts -maxdepth 1 -type f -name "[4-5][0-9]-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true
+                find scripts -maxdepth 1 -type f -name "[4-6][0-9]-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true
                 rm -f /tmp/nexos-gh-smoke.out
                 if [[ "$fail" -gt 0 ]]; then echo "Smoke source checks found failures."; fi
               } | tee -a "$smoke"
@@ -218,13 +210,16 @@ jobs:
                 ready_check "source preflight passed" test "$(cat build/logs/github-actions-source-preflight-exit-code.txt 2>/dev/null || echo 1)" = "0"
                 ready_check "package safety generated optional move log" test -f config/nexos-removed-optional-packages.txt
                 ready_check "release readiness injector wired" grep -q "59-inject-nexos-release-readiness-center.sh" scripts/19-fix-nexos-package-lists.sh
+                ready_check "source audit injector wired" grep -q "60-inject-nexos-final-source-build-audit.sh" scripts/19-fix-nexos-package-lists.sh
                 ready_check "final smoke source report generated" test -s build/logs/nexos-final-smoke-source-report.txt
                 ready_check "build validation report generated" test -s build/logs/nexos-build-validation-report.txt
                 ready_soft "workflow has release readiness upload path through build/logs" grep -q "build/logs/\*\*" .github/workflows/build-nexos-iso.yml
                 ready_soft "workflow previews final smoke report" grep -q "Final smoke source report preview" .github/workflows/build-nexos-iso.yml
                 ready_soft "workflow previews build validation report" grep -q "Build validation report preview" .github/workflows/build-nexos-iso.yml
                 ready_soft "workflow source contains release readiness source report" grep -q "nexos-release-readiness-source-report.txt" .github/workflows/build-nexos-iso.yml
+                ready_soft "workflow source contains final source audit report" grep -q "nexos-final-source-build-audit-report.txt" .github/workflows/build-nexos-iso.yml
                 ready_soft "release readiness command heredoc generated" grep -R "nexos-release-readiness-center" -n scripts/59-inject-nexos-release-readiness-center.sh
+                ready_soft "source audit command heredoc generated" grep -R "nexos-final-source-build-audit" -n scripts/60-inject-nexos-final-source-build-audit.sh
                 echo
                 echo "Summary: PASS=$pass WARN=$warn FAIL=$fail"
                 echo
@@ -232,6 +227,7 @@ jobs:
                 echo "- nexos-build-validation-report.txt"
                 echo "- nexos-final-smoke-source-report.txt"
                 echo "- nexos-release-readiness-source-report.txt"
+                echo "- nexos-final-source-build-audit-report.txt"
                 echo "- github-actions-package-safety.log"
                 echo "- github-actions-*-iso.log"
                 echo
@@ -239,6 +235,36 @@ jobs:
                 if [[ "$fail" -gt 0 ]]; then echo "NOT READY - fix FAIL lines above before trusting this ISO."; else echo "READY FOR ISO BUILD ATTEMPT - review WARN lines and final ISO validation after build."; fi
                 rm -f /tmp/nexos-gh-ready.out
               } | tee -a "$readiness"
+
+              audit="build/logs/nexos-final-source-build-audit-report.txt"
+              : > "$audit"
+              {
+                echo "NexOS Final Source Build Audit Report"
+                echo "===================================="
+                date
+                echo
+                pass=0; warn=0; fail=0
+                audit_check(){ name="$1"; shift; if "$@" >/tmp/nexos-gh-audit.out 2>&1; then echo "PASS: $name"; pass=$((pass+1)); else echo "FAIL: $name"; sed "s/^/  /" /tmp/nexos-gh-audit.out; fail=$((fail+1)); fi; }
+                audit_soft(){ name="$1"; shift; if "$@" >/tmp/nexos-gh-audit.out 2>&1; then echo "PASS: $name"; pass=$((pass+1)); else echo "WARN: $name"; sed "s/^/  /" /tmp/nexos-gh-audit.out; warn=$((warn+1)); fi; }
+                audit_check "workflow file exists" test -f .github/workflows/build-nexos-iso.yml
+                audit_check "workflow has ISO build job" grep -q "Build bootable live ISO" .github/workflows/build-nexos-iso.yml
+                audit_check "workflow has final source audit preview" grep -q "Final source build audit preview" .github/workflows/build-nexos-iso.yml
+                audit_check "all scripts pass bash syntax" bash -lc "while IFS= read -r s; do bash -n \"$s\" || exit 1; done < <(find scripts -type f -name \"*.sh\" | sort)"
+                audit_check "all late injectors are wired" bash -lc "while IFS= read -r f; do b=\$(basename \"$f\"); grep -q \"$b\" scripts/19-fix-nexos-package-lists.sh || { echo \"missing $b\"; exit 1; }; done < <(find scripts -maxdepth 1 -type f -name \"*-inject-nexos-*.sh\" | awk -F/ '\''{print $NF}'\'' | awk -F- '\''$1>=27 {print \"scripts/\"$0}'\'' | sort -V)"
+                audit_soft "no obvious CRLF in scripts" bash -lc "! grep -RIl $'\\r' scripts --include='*.sh' | grep ."
+                audit_soft "source audit injector has embedded Python" grep -q "ast.parse" scripts/60-inject-nexos-final-source-build-audit.sh
+                audit_soft "package safety optional package block present" grep -q "OPTIONAL_UNSAFE_PACKAGES" scripts/19-fix-nexos-package-lists.sh
+                audit_soft "workflow uploads all build logs" grep -q "build/logs/\*\*" .github/workflows/build-nexos-iso.yml
+                echo
+                echo "Summary: PASS=$pass WARN=$warn FAIL=$fail"
+                echo
+                echo "Final late injectors:"
+                find scripts -maxdepth 1 -type f -name "[5-6][0-9]-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true
+                echo
+                echo "Audit verdict:"
+                if [[ "$fail" -gt 0 ]]; then echo "SOURCE AUDIT FAILED - fix FAIL lines before trusting this workflow."; else echo "SOURCE AUDIT PASSED - workflow can attempt ISO build."; fi
+                rm -f /tmp/nexos-gh-audit.out
+              } | tee -a "$audit"
 
               set -e
               if [[ "$NEXOS_EDITION" == "all" ]]; then
@@ -299,10 +325,17 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [[ -f build/logs/nexos-final-source-build-audit-report.txt ]]; then
+            echo "### Final source build audit preview" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            head -n 120 build/logs/nexos-final-source-build-audit-report.txt >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
           combined="build/logs/github-actions-combined-tail.log"
           : > "$combined"
           for f in build/logs/*.log; do [[ -f "$f" ]] || continue; echo "===== $f =====" >> "$combined"; tail -n 220 "$f" >> "$combined" || true; echo >> "$combined"; done
-          first_error="$(grep -iE 'error|failed|unable to locate|not found|syntax error|no such file|E: |conflict|missing package safety|not wired|NOT READY' "$combined" | head -n 1 || true)"
+          first_error="$(grep -iE 'error|failed|unable to locate|not found|syntax error|no such file|E: |conflict|missing package safety|not wired|NOT READY|SOURCE AUDIT FAILED' "$combined" | head -n 1 || true)"
           if [[ -z "$first_error" ]]; then first_error="No obvious error marker found. Check build/logs artifact."; fi
           echo "### First detected error" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
