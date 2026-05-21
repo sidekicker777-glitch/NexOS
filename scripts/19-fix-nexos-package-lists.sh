@@ -41,7 +41,8 @@ for injector in \
   52-inject-nexos-desktop-shell-polish-v2.sh \
   53-inject-nexos-iso-doctor.sh \
   54-inject-nexos-build-fix-pass.sh \
-  55-inject-nexos-build-validation-report.sh; do
+  55-inject-nexos-build-validation-report.sh \
+  56-inject-nexos-app-icon-validation-fix-pass.sh; do
   if [[ -f "$SCRIPT_DIR/$injector" ]]; then
     bash "$SCRIPT_DIR/$injector"
   fi
@@ -124,6 +125,8 @@ OPTIONAL_UNSAFE_PACKAGES=(
   shellcheck
   python3-yaml
   jq
+  desktop-file-utils
+  glib2.0-bin
 )
 
 is_optional_pkg() {
@@ -207,7 +210,7 @@ for pkg in \
   build-essential nodejs npm ripgrep arandr brightnessctl os-prober efibootmgr \
   lightdm lightdm-gtk-greeter wmctrl network-manager-gnome acpi upower xfce4-power-manager xfce4-screensaver light-locker \
   mlocate catfish sysstat lsof htop iotop nethogs xfce4-taskmanager gnome-system-monitor \
-  ufw gufw net-tools dnsutils traceroute fontconfig shellcheck python3-yaml jq; do
+  ufw gufw net-tools dnsutils traceroute fontconfig shellcheck python3-yaml jq desktop-file-utils glib2.0-bin; do
   install_if_available "$pkg"
 done
 HOOK
