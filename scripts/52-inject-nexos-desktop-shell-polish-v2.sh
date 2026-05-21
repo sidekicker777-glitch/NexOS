@@ -75,7 +75,6 @@ chmod 0755 /usr/local/bin/nexos-create-desktop-shortcuts
 cat > /usr/local/bin/nexos-panel-polish <<'BASH'
 #!/usr/bin/env bash
 set -euo pipefail
-# Safer XFCE panel polish without destroying user layout.
 xfconf-query -c xfce4-panel -p /panels/panel-1/position -n -t string -s 'p=10;x=0;y=0' 2>/dev/null || true
 xfconf-query -c xfce4-panel -p /panels/panel-1/size -n -t int -s 36 2>/dev/null || true
 xfconf-query -c xfce4-panel -p /panels/panel-1/length -n -t int -s 100 2>/dev/null || true
