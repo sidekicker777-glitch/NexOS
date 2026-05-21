@@ -182,6 +182,8 @@ jobs:
                 smoke_check "package safety script exists" test -f scripts/19-fix-nexos-package-lists.sh
                 smoke_check "final smoke injector exists" test -f scripts/58-inject-nexos-final-smoke-test-pack.sh
                 smoke_check "final smoke injector wired" grep -q "58-inject-nexos-final-smoke-test-pack.sh" scripts/19-fix-nexos-package-lists.sh
+                smoke_check "release readiness injector exists" test -f scripts/59-inject-nexos-release-readiness-center.sh
+                smoke_check "release readiness injector wired" grep -q "59-inject-nexos-release-readiness-center.sh" scripts/19-fix-nexos-package-lists.sh
                 smoke_check "desktop ux injector exists" test -f scripts/57-inject-nexos-desktop-ux-final-pass.sh
                 smoke_check "app icon injector exists" test -f scripts/56-inject-nexos-app-icon-validation-fix-pass.sh
                 smoke_soft "control panel injector exists" test -f scripts/51-inject-nexos-control-panel-unified.sh
@@ -200,6 +202,43 @@ jobs:
                 rm -f /tmp/nexos-gh-smoke.out
                 if [[ "$fail" -gt 0 ]]; then echo "Smoke source checks found failures."; fi
               } | tee -a "$smoke"
+
+              readiness="build/logs/nexos-release-readiness-source-report.txt"
+              : > "$readiness"
+              {
+                echo "NexOS Release Readiness Source Report"
+                echo "===================================="
+                date
+                echo
+                echo "Edition: $NEXOS_EDITION"
+                echo
+                pass=0; warn=0; fail=0
+                ready_check(){ name="$1"; shift; if "$@" >/tmp/nexos-gh-ready.out 2>&1; then echo "PASS: $name"; pass=$((pass+1)); else echo "FAIL: $name"; sed "s/^/  /" /tmp/nexos-gh-ready.out; fail=$((fail+1)); fi; }
+                ready_soft(){ name="$1"; shift; if "$@" >/tmp/nexos-gh-ready.out 2>&1; then echo "PASS: $name"; pass=$((pass+1)); else echo "WARN: $name"; sed "s/^/  /" /tmp/nexos-gh-ready.out; warn=$((warn+1)); fi; }
+                ready_check "source preflight passed" test "$(cat build/logs/github-actions-source-preflight-exit-code.txt 2>/dev/null || echo 1)" = "0"
+                ready_check "package safety generated optional move log" test -f config/nexos-removed-optional-packages.txt
+                ready_check "release readiness injector wired" grep -q "59-inject-nexos-release-readiness-center.sh" scripts/19-fix-nexos-package-lists.sh
+                ready_check "final smoke source report generated" test -s build/logs/nexos-final-smoke-source-report.txt
+                ready_check "build validation report generated" test -s build/logs/nexos-build-validation-report.txt
+                ready_soft "workflow has release readiness upload path through build/logs" grep -q "build/logs/\*\*" .github/workflows/build-nexos-iso.yml
+                ready_soft "workflow previews final smoke report" grep -q "Final smoke source report preview" .github/workflows/build-nexos-iso.yml
+                ready_soft "workflow previews build validation report" grep -q "Build validation report preview" .github/workflows/build-nexos-iso.yml
+                ready_soft "workflow source contains release readiness source report" grep -q "nexos-release-readiness-source-report.txt" .github/workflows/build-nexos-iso.yml
+                ready_soft "release readiness command heredoc generated" grep -R "nexos-release-readiness-center" -n scripts/59-inject-nexos-release-readiness-center.sh
+                echo
+                echo "Summary: PASS=$pass WARN=$warn FAIL=$fail"
+                echo
+                echo "Release artifacts expected in build/logs:"
+                echo "- nexos-build-validation-report.txt"
+                echo "- nexos-final-smoke-source-report.txt"
+                echo "- nexos-release-readiness-source-report.txt"
+                echo "- github-actions-package-safety.log"
+                echo "- github-actions-*-iso.log"
+                echo
+                echo "Release readiness verdict:"
+                if [[ "$fail" -gt 0 ]]; then echo "NOT READY - fix FAIL lines above before trusting this ISO."; else echo "READY FOR ISO BUILD ATTEMPT - review WARN lines and final ISO validation after build."; fi
+                rm -f /tmp/nexos-gh-ready.out
+              } | tee -a "$readiness"
 
               set -e
               if [[ "$NEXOS_EDITION" == "all" ]]; then
@@ -253,10 +292,17 @@ jobs:
             echo '```' >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [[ -f build/logs/nexos-release-readiness-source-report.txt ]]; then
+            echo "### Release readiness source report preview" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            head -n 120 build/logs/nexos-release-readiness-source-report.txt >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
           combined="build/logs/github-actions-combined-tail.log"
           : > "$combined"
           for f in build/logs/*.log; do [[ -f "$f" ]] || continue; echo "===== $f =====" >> "$combined"; tail -n 220 "$f" >> "$combined" || true; echo >> "$combined"; done
-          first_error="$(grep -iE 'error|failed|unable to locate|not found|syntax error|no such file|E: |conflict|missing package safety|not wired' "$combined" | head -n 1 || true)"
+          first_error="$(grep -iE 'error|failed|unable to locate|not found|syntax error|no such file|E: |conflict|missing package safety|not wired|NOT READY' "$combined" | head -n 1 || true)"
           if [[ -z "$first_error" ]]; then first_error="No obvious error marker found. Check build/logs artifact."; fi
           echo "### First detected error" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
