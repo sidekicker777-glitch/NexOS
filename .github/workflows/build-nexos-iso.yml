@@ -108,38 +108,73 @@ jobs:
             echo "syntax_failed=$syntax_failed" | tee -a build/logs/github-actions-preflight.log
             [[ "$syntax_failed" = "0" ]] || exit 13
 
-            if [[ -f scripts/02-init-live-build.sh ]]; then bash scripts/02-init-live-build.sh 2>&1 | tee build/logs/github-actions-init-live-build.log || true; fi
-            if [[ -f scripts/19-fix-nexos-package-lists.sh ]]; then bash scripts/19-fix-nexos-package-lists.sh 2>&1 | tee build/logs/github-actions-package-safety.log || true; fi
+            [[ ! -f scripts/02-init-live-build.sh ]] || bash scripts/02-init-live-build.sh 2>&1 | tee build/logs/github-actions-init-live-build.log || true
+            [[ ! -f scripts/19-fix-nexos-package-lists.sh ]] || bash scripts/19-fix-nexos-package-lists.sh 2>&1 | tee build/logs/github-actions-package-safety.log || true
             CFG="live-build/config"
 
             validation="build/logs/nexos-build-validation-report.txt"
             {
-              echo "NexOS Build Validation Report"; echo "============================="; date; echo; echo "Edition: $NEXOS_EDITION"; echo
-              echo "Late injectors wired in safety pass:"; grep -E "^[[:space:]]+[0-9]+-inject-nexos-.*\.sh" scripts/19-fix-nexos-package-lists.sh | sed "s/^[[:space:]]*/- /" || true; echo
-              echo "Injector files present:"; find scripts -maxdepth 1 -type f -name "*-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true; echo
-              echo "Generated package lists after safety pass:"; find "$CFG/package-lists" -maxdepth 1 -type f -name "*.list.chroot" -printf "- %f\n" 2>/dev/null | sort || true; echo
-              echo "Optional packages moved out of hard lists:"; if [[ -f "$CFG/nexos-removed-optional-packages.txt" ]]; then sed "s/^/- /" "$CFG/nexos-removed-optional-packages.txt"; else echo "- none recorded"; fi; echo
-              echo "Generated normal hooks:"; find "$CFG/hooks/normal" -maxdepth 1 -type f -printf "- %f\n" 2>/dev/null | sort || true; echo
-              echo "Expected NexOS commands from injectors:"; grep -R "cat > /usr/local/bin/nexos-" -n scripts/*inject-nexos-*.sh 2>/dev/null | sed "s/^/- /" | head -240 || true
+              echo "NexOS Build Validation Report"
+              echo "============================="
+              date
+              echo
+              echo "Edition: $NEXOS_EDITION"
+              echo
+              echo "Late injectors wired in safety pass:"
+              if [[ -f scripts/19-fix-nexos-package-lists.sh ]]; then
+                find scripts -maxdepth 1 -type f -name "*-inject-nexos-*.sh" | sort -V | while read -r inj; do
+                  base="$(basename "$inj")"
+                  n="${base%%-*}"
+                  if [[ "$n" =~ ^[0-9]+$ && "$n" -ge 27 ]] && grep -q "$base" scripts/19-fix-nexos-package-lists.sh; then
+                    echo "- $base"
+                  fi
+                done
+              else
+                echo "- missing scripts/19-fix-nexos-package-lists.sh"
+              fi
+              echo
+              echo "Injector files present:"
+              find scripts -maxdepth 1 -type f -name "*-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true
+              echo
+              echo "Generated package lists after safety pass:"
+              find "$CFG/package-lists" -maxdepth 1 -type f -name "*.list.chroot" -printf "- %f\n" 2>/dev/null | sort || true
+              echo
+              echo "Optional packages moved out of hard lists:"
+              if [[ -f "$CFG/nexos-removed-optional-packages.txt" ]]; then sed "s/^/- /" "$CFG/nexos-removed-optional-packages.txt"; else echo "- none recorded"; fi
+              echo
+              echo "Generated normal hooks:"
+              find "$CFG/hooks/normal" -maxdepth 1 -type f -printf "- %f\n" 2>/dev/null | sort || true
+              echo
+              echo "Expected NexOS commands from injectors:"
+              grep -R "cat > /usr/local/bin/nexos-" -n scripts/*inject-nexos-*.sh 2>/dev/null | sed "s/^/- /" | head -240 || true
             } | tee "$validation"
 
             smoke="build/logs/nexos-final-smoke-source-report.txt"
             {
-              echo "NexOS Final Smoke Source Report"; echo "==============================="; date; echo
+              echo "NexOS Final Smoke Source Report"
+              echo "==============================="
+              date
+              echo
               pass=0; warn=0; fail=0
               smoke_check(){ name="$1"; shift; if "$@" >/tmp/nexos-gh-smoke.out 2>&1; then echo "PASS: $name"; pass=$((pass+1)); else echo "FAIL: $name"; sed "s/^/  /" /tmp/nexos-gh-smoke.out; fail=$((fail+1)); fi; }
               smoke_soft(){ name="$1"; shift; if "$@" >/tmp/nexos-gh-smoke.out 2>&1; then echo "PASS: $name"; pass=$((pass+1)); else echo "WARN: $name"; sed "s/^/  /" /tmp/nexos-gh-smoke.out; warn=$((warn+1)); fi; }
               smoke_check "package safety script exists" test -f scripts/19-fix-nexos-package-lists.sh
-              for n in 56 57 58 59 60 61; do smoke_check "injector $n exists" bash -lc "ls scripts/${n}-inject-nexos-*.sh >/dev/null 2>&1"; done
+              for n in 56 57 58 59 60 61 62 63; do smoke_check "injector $n exists" bash -lc "ls scripts/${n}-inject-nexos-*.sh >/dev/null 2>&1"; done
               smoke_soft "live-build package lists generated" bash -lc "find live-build/config/package-lists -maxdepth 1 -name \"*.list.chroot\" | grep -q ."
               smoke_soft "live-build hooks generated" bash -lc "find live-build/config/hooks/normal -maxdepth 1 -type f | grep -q ."
-              echo; echo "Summary: PASS=$pass WARN=$warn FAIL=$fail"
+              echo
+              echo "Summary: PASS=$pass WARN=$warn FAIL=$fail"
               rm -f /tmp/nexos-gh-smoke.out
             } | tee "$smoke"
 
             readiness="build/logs/nexos-release-readiness-source-report.txt"
             {
-              echo "NexOS Release Readiness Source Report"; echo "===================================="; date; echo; echo "Edition: $NEXOS_EDITION"; echo
+              echo "NexOS Release Readiness Source Report"
+              echo "===================================="
+              date
+              echo
+              echo "Edition: $NEXOS_EDITION"
+              echo
               echo "Source preflight exit code: $(cat build/logs/github-actions-source-preflight-exit-code.txt 2>/dev/null || echo unknown)"
               echo "Package safety log: $([[ -s build/logs/github-actions-package-safety.log ]] && echo present || echo missing)"
               echo "Build validation report: $([[ -s build/logs/nexos-build-validation-report.txt ]] && echo present || echo missing)"
@@ -148,7 +183,10 @@ jobs:
 
             audit="build/logs/nexos-final-source-build-audit-report.txt"
             {
-              echo "NexOS Final Source Build Audit Report"; echo "===================================="; date; echo
+              echo "NexOS Final Source Build Audit Report"
+              echo "===================================="
+              date
+              echo
               echo "Workflow file exists: $([[ -f .github/workflows/build-nexos-iso.yml ]] && echo yes || echo no)"
               echo "All scripts bash -n checked before build."
               echo "All late injector wiring checked before build."
@@ -156,9 +194,17 @@ jobs:
 
             notes="build/logs/nexos-release-notes.md"
             {
-              echo "# NexOS ISO Release Notes"; echo; echo "Generated: $(date)"; echo; echo "Edition: $NEXOS_EDITION"; echo
-              echo "## Included source features"; find scripts -maxdepth 1 -type f -name "*-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true; echo
-              echo "## Build reports included in this artifact"; printf -- "- nexos-build-validation-report.txt\n- nexos-final-smoke-source-report.txt\n- nexos-release-readiness-source-report.txt\n- nexos-final-source-build-audit-report.txt\n- github-actions-package-safety.log\n"
+              echo "# NexOS ISO Release Notes"
+              echo
+              echo "Generated: $(date)"
+              echo
+              echo "Edition: $NEXOS_EDITION"
+              echo
+              echo "## Included source features"
+              find scripts -maxdepth 1 -type f -name "*-inject-nexos-*.sh" -printf "- %f\n" | sort -V || true
+              echo
+              echo "## Build reports included in this artifact"
+              printf -- "- nexos-build-validation-report.txt\n- nexos-final-smoke-source-report.txt\n- nexos-release-readiness-source-report.txt\n- nexos-final-source-build-audit-report.txt\n- github-actions-package-safety.log\n"
             } | tee "$notes"
 
             set -e
