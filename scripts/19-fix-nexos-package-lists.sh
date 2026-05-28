@@ -136,6 +136,16 @@ OPTIONAL_UNSAFE_PACKAGES=(
   glib2.0-bin
 )
 
+# Debian Trixie removed/renamed some historical package names. If an old
+# package is still emitted by an earlier injector, replace it here before lb
+# gets to chroot_install-packages. This is the fix for the policykit-1 blocker.
+replacement_packages() {
+  case "$1" in
+    policykit-1) echo "polkitd pkexec" ;;
+    *) return 1 ;;
+  esac
+}
+
 is_optional_pkg() {
   local needle="$1"
   local item
@@ -152,7 +162,9 @@ pkg_available() {
 
 apt-get update >/dev/null 2>&1 || true
 removed_log="$LB_CONFIG_DIR/nexos-removed-optional-packages.txt"
+replacement_log="$LB_CONFIG_DIR/nexos-replaced-obsolete-packages.txt"
 : > "$removed_log"
+: > "$replacement_log"
 
 for list in "$LB_CONFIG_DIR"/package-lists/*.list.chroot; do
   [[ -f "$list" ]] || continue
@@ -167,6 +179,20 @@ for list in "$LB_CONFIG_DIR"/package-lists/*.list.chroot; do
     pkg="$(awk '{print $1}' <<< "$line")"
     if [[ -z "$pkg" ]]; then
       echo "$line" >> "$tmp"
+      continue
+    fi
+
+    if replacements="$(replacement_packages "$pkg" 2>/dev/null)"; then
+      echo "$pkg -> $replacements" >> "$replacement_log"
+      echo "# obsolete package replaced for Debian Trixie: $pkg -> $replacements" >> "$tmp"
+      for repl in $replacements; do
+        if pkg_available "$repl"; then
+          echo "$repl" >> "$tmp"
+        else
+          echo "$repl" >> "$removed_log"
+          echo "# replacement unavailable on this runner: $repl" >> "$tmp"
+        fi
+      done
       continue
     fi
 
@@ -190,6 +216,7 @@ for list in "$LB_CONFIG_DIR"/package-lists/*.list.chroot; do
 done
 
 sort -u "$removed_log" -o "$removed_log" || true
+sort -u "$replacement_log" -o "$replacement_log" || true
 
 cat > "$LB_CONFIG_DIR/hooks/normal/015-nexos-optional-package-pass.hook.chroot" <<'HOOK'
 #!/usr/bin/env bash
@@ -222,6 +249,13 @@ for pkg in \
 done
 HOOK
 chmod 0755 "$LB_CONFIG_DIR/hooks/normal/015-nexos-optional-package-pass.hook.chroot"
+
+log "Obsolete packages replaced for this Debian release:"
+if [[ -s "$replacement_log" ]]; then
+  sed 's/^/  - /' "$replacement_log" || true
+else
+  log "  none"
+fi
 
 log "Optional/unavailable packages moved out of hard package lists:"
 if [[ -s "$removed_log" ]]; then
