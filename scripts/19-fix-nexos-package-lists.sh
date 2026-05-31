@@ -134,11 +134,15 @@ OPTIONAL_UNSAFE_PACKAGES=(
   jq
   desktop-file-utils
   glib2.0-bin
+
+  # Debian Trixie already pulls iputils-ping as the ping provider. inetutils-ping
+  # conflicts with package virtual/provided name "ping" and breaks lb install.
+  inetutils-ping
 )
 
 # Debian Trixie removed/renamed some historical package names. If an old
 # package is still emitted by an earlier injector, replace it here before lb
-# gets to chroot_install-packages. This is the fix for the policykit-1 blocker.
+# gets to chroot_install-packages.
 replacement_packages() {
   case "$1" in
     policykit-1) echo "polkitd pkexec" ;;
@@ -198,7 +202,7 @@ for list in "$LB_CONFIG_DIR"/package-lists/*.list.chroot; do
 
     if is_optional_pkg "$pkg"; then
       echo "$pkg" >> "$removed_log"
-      echo "# optional moved to conditional hook: $pkg" >> "$tmp"
+      echo "# optional/conflicting package moved to conditional hook or skipped: $pkg" >> "$tmp"
       continue
     fi
 
@@ -257,7 +261,7 @@ else
   log "  none"
 fi
 
-log "Optional/unavailable packages moved out of hard package lists:"
+log "Optional/unavailable/conflicting packages moved out of hard package lists:"
 if [[ -s "$removed_log" ]]; then
   sed 's/^/  - /' "$removed_log" || true
 else
