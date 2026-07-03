@@ -26,9 +26,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build-iso:
     name: Build bootable live ISO
@@ -37,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout NexOS source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Show runner disk space before build
         run: |
@@ -279,14 +276,68 @@ jobs:
         if: always()
         run: df -h
 
+      - name: Write NexOS artifact manifest
+        if: always()
+        run: |
+          mkdir -p build/logs iso
+          {
+            echo "NexOS Artifact Manifest"
+            echo "======================="
+            date
+            echo
+            echo "Run: $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT"
+            echo
+            echo "ISO files:"
+            ls -lh iso/*.iso 2>/dev/null || true
+            echo
+            echo "Checksum files:"
+            cat iso/*.sha256 2>/dev/null || true
+            echo
+            echo "Log files:"
+            find build/logs -maxdepth 1 -type f -printf '- %f\n' 2>/dev/null | sort || true
+          } | tee build/logs/nexos-artifact-manifest.txt
+
+      - name: Upload NexOS build logs artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: NexOS-build-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/logs/**
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 6
+          overwrite: true
+
+      - name: Upload NexOS checksums artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: NexOS-checksums-${{ github.run_id }}-${{ github.run_attempt }}
+          path: iso/*.sha256
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0
+          overwrite: true
+
       - name: Upload NexOS ISO artifact
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
-          name: NexOS-live-ISO
-          path: |
-            iso/*.iso
-            iso/*.sha256
-            build/logs/**
-          if-no-files-found: warn
+          name: NexOS-live-ISO-${{ github.run_id }}-${{ github.run_attempt }}
+          path: iso/*.iso
+          if-no-files-found: error
           retention-days: 14
+          compression-level: 0
+          overwrite: true
+
+      - name: Final build result
+        if: always()
+        run: |
+          code="0"
+          if [[ -f build/logs/github-actions-exit-code.txt ]]; then code="$(cat build/logs/github-actions-exit-code.txt)"; elif [[ -f build/logs/github-actions-source-preflight-exit-code.txt ]]; then code="$(cat build/logs/github-actions-source-preflight-exit-code.txt)"; fi
+          echo "## NexOS artifact upload note" >> "$GITHUB_STEP_SUMMARY"
+          echo "The ISO build result is controlled by exit code $code. Artifact upload is split into logs, checksums, and ISO, and upload timeouts no longer mark a successful ISO build as failed." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$code" != "0" ]]; then exit "$code"; fi
